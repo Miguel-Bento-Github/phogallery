@@ -34,15 +34,15 @@ npm install
 
 # Install backend dependencies
 echo "📦 Installing backend dependencies..."
-cd photography-portfolio/backend
+cd backend
 pnpm install
-cd ../..
+cd ..
 
 # Install frontend dependencies  
 echo "📦 Installing frontend dependencies..."
-cd photography-portfolio/frontend
+cd frontend
 pnpm install
-cd ../..
+cd ..
 
 echo ""
 echo "🎯 Starting both servers..."

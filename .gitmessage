@@ -1,0 +1,30 @@
+# <type>(<scope>): <subject>
+#
+# <body>
+#
+# <footer>
+
+# Type should be one of the following:
+# * feat: A new feature
+# * fix: A bug fix
+# * docs: Documentation only changes
+# * style: Changes that do not affect the meaning of the code
+# * refactor: A code change that neither fixes a bug nor adds a feature
+# * test: Adding missing tests or correcting existing tests
+# * chore: Changes to the build process or auxiliary tools
+# * perf: A code change that improves performance
+# * ci: Changes to CI configuration files and scripts
+# * build: Changes that affect the build system or external dependencies
+# * revert: Reverts a previous commit
+
+# Scope should be noun describing a section of the codebase (optional)
+# Examples: component, store, layout, api, utils, config
+
+# Subject should be imperative, lowercase and no final period
+# Example: "add user authentication feature"
+
+# Body should explain what and why vs. how (optional)
+
+# Footer should contain any BREAKING CHANGES or issue references (optional)
+# Example: "BREAKING CHANGE: API endpoint changed"
+# Example: "Closes #123" 

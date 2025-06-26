@@ -4,13 +4,13 @@
   "description": "Real-time photography portfolio with Vue 3 frontend and Strapi v5 backend",
   "scripts": {
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "dev:backend": "cd photography-portfolio/backend && npm run develop",
-    "dev:frontend": "cd photography-portfolio/frontend && npm run dev",
+    "dev:backend": "cd backend && pnpm run develop",
+    "dev:frontend": "cd frontend && pnpm run dev",
     "build": "npm run build:backend && npm run build:frontend",
-    "build:backend": "cd photography-portfolio/backend && npm run build",
-    "build:frontend": "cd photography-portfolio/frontend && npm run build",
-    "test": "cd photography-portfolio/frontend && npm run test",
-    "test:coverage": "cd photography-portfolio/frontend && npm run test:coverage"
+    "build:backend": "cd backend && pnpm run build",
+    "build:frontend": "cd frontend && pnpm run build",
+    "test": "cd frontend && pnpm run test",
+    "test:coverage": "cd frontend && pnpm run test:coverage"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
