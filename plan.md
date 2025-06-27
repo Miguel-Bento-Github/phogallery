@@ -1,12 +1,34 @@
 # Vue.js Photography Portfolio: Modern Implementation Guide
 
-An updated comprehensive implementation plan using **Tailwind CSS v4**, **Strapi v5**, and **Vue 3** with cutting-edge development practices and production-ready configurations.
+An updated comprehensive implementation plan using **Tailwind CSS v4**, **Supabase** (open source), **Vue 3**, and **pnpm** for cutting-edge development practices and production-ready configurations.
+
+## Prerequisites
+
+Before starting, ensure you have **pnpm** installed for faster, more efficient package management:
+
+```bash
+# Install pnpm globally
+npm install -g pnpm
+
+# Or using corepack (recommended for Node.js 16.10+)
+corepack enable
+corepack prepare pnpm@latest --activate
+
+# Verify installation
+pnpm --version
+```
+
+**Why pnpm?**
+- **2x faster installs** compared to npm
+- **Efficient disk usage** with symlinked dependencies
+- **Strict dependency resolution** prevents phantom dependencies
+- **Better monorepo support** for complex projects
 
 ## Technology Stack Revolution
 
-The modern photography portfolio implementation leverages three groundbreaking technology updates. **Tailwind CSS v4** introduces a revolutionary Rust-powered "Oxide" engine delivering **5x faster full builds** and **100x faster incremental builds**. **Strapi v5** transforms content management with its new Document Service API, flattened response format, and complete TypeScript migration. **Vue 3** provides the reactive foundation with Composition API patterns optimized for modern development workflows.
+The modern photography portfolio implementation leverages cutting-edge open source technologies. **Tailwind CSS v4** introduces a revolutionary Rust-powered "Oxide" engine delivering **5x faster full builds** and **100x faster incremental builds**. **Supabase** provides a fully open source PostgreSQL backend with built-in real-time subscriptions, authentication, and storage. **Vue 3** provides the reactive foundation with Composition API patterns optimized for modern development workflows.
 
-This stack combination eliminates traditional configuration complexity while delivering unprecedented performance. Tailwind v4's CSS-first approach replaces JavaScript configuration files with native CSS, Strapi v5's document-based architecture simplifies content relationships, and Vue 3's Composition API enables cleaner, more maintainable code patterns.
+This stack combination eliminates traditional configuration complexity while delivering unprecedented performance. Tailwind v4's CSS-first approach replaces JavaScript configuration files with native CSS, Supabase's PostgreSQL architecture provides enterprise-grade database features, and Vue 3's Composition API enables cleaner, more maintainable code patterns.
 
 ## Tailwind CSS v4 Setup and Configuration
 
@@ -103,186 +125,675 @@ Tailwind v4 eliminates JavaScript configuration files entirely:
 - Ring utilities: `ring` now defaults to 1px (was 3px)
 - Opacity utilities: Use `text-red-500/50` instead of `text-opacity-50`
 
-## Strapi v5 Modern Integration
+## Supabase Open Source Backend
 
-### Document Service API Architecture
+### Why Supabase for Photography Portfolio?
 
-Strapi v5 introduces a revolutionary Document Service API that fundamentally changes content management:
+Supabase provides the perfect open source backend offering:
 
-```javascript
-// Modern Document Service API usage
-const strapi = require('@strapi/strapi');
+- ✅ **Fully Open Source** - MIT licensed, self-hostable PostgreSQL
+- ✅ **Real-time Subscriptions** - Built-in WebSocket support
+- ✅ **Storage API** - Optimized image handling with CDN
+- ✅ **Edge Functions** - Serverless Deno runtime for image processing
+- ✅ **Built-in Auth** - JWT-based authentication with social providers
+- ✅ **Auto-generated APIs** - REST and GraphQL endpoints
+- ✅ **Row Level Security** - PostgreSQL RLS for data protection
+- ✅ **TypeScript Support** - Auto-generated types from database schema
 
-// Find documents with new API
-const photos = await strapi.documents('api::photo.photo').findMany({
-  filters: { category: { $eq: 'portrait' } },
-  sort: 'createdAt:desc',
-  populate: ['photographer', 'tags', 'image']
-});
+### Database Schema Setup
 
-// Create document with simplified structure
-const newPhoto = await strapi.documents('api::photo.photo').create({
-  data: {
-    title: 'Golden Hour Portrait',
-    description: 'Professional portrait photography',
-    category: 'portrait',
-    featured: true
-  }
-});
+```sql
+-- Enable necessary extensions
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- Create custom types
+CREATE TYPE photo_category AS ENUM (
+  'portrait', 'landscape', 'street', 'wildlife', 'macro', 'wedding', 'event'
+);
+
+-- Photographers table
+CREATE TABLE photographers (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  email TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  bio TEXT,
+  avatar_url TEXT,
+  website_url TEXT,
+  social_links JSONB DEFAULT '{}',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Photos table
+CREATE TABLE photos (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  title TEXT NOT NULL,
+  description TEXT,
+  slug TEXT UNIQUE NOT NULL,
+  image_url TEXT NOT NULL,
+  image_metadata JSONB DEFAULT '{}', -- width, height, format, size
+  thumbnail_url TEXT,
+  category photo_category NOT NULL,
+  tags TEXT[] DEFAULT '{}',
+  featured BOOLEAN DEFAULT FALSE,
+  
+  -- Camera settings
+  camera_settings JSONB DEFAULT '{}', -- camera, lens, aperture, etc.
+  
+  -- Location data
+  location TEXT,
+  location_coordinates POINT,
+  capture_date DATE,
+  
+  -- Engagement metrics
+  view_count INTEGER DEFAULT 0,
+  like_count INTEGER DEFAULT 0,
+  
+  -- Relationships
+  photographer_id UUID REFERENCES photographers(id) ON DELETE CASCADE,
+  
+  -- Timestamps
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  published_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Galleries table
+CREATE TABLE galleries (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  description TEXT,
+  slug TEXT UNIQUE NOT NULL,
+  cover_photo_id UUID REFERENCES photos(id) ON DELETE SET NULL,
+  photographer_id UUID REFERENCES photographers(id) ON DELETE CASCADE,
+  is_public BOOLEAN DEFAULT TRUE,
+  sort_order INTEGER DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Gallery photos junction table
+CREATE TABLE gallery_photos (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  gallery_id UUID REFERENCES galleries(id) ON DELETE CASCADE,
+  photo_id UUID REFERENCES photos(id) ON DELETE CASCADE,
+  sort_order INTEGER DEFAULT 0,
+  added_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(gallery_id, photo_id)
+);
+
+-- Likes table for user interactions
+CREATE TABLE photo_likes (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  photo_id UUID REFERENCES photos(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  ip_address INET,
+  user_agent TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(photo_id, user_id)
+);
+
+-- Views table for analytics
+CREATE TABLE photo_views (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  photo_id UUID REFERENCES photos(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  ip_address INET NOT NULL,
+  user_agent TEXT,
+  referrer TEXT,
+  viewed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Comments table
+CREATE TABLE photo_comments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  photo_id UUID REFERENCES photos(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  is_approved BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create indexes for performance
+CREATE INDEX idx_photos_category ON photos(category);
+CREATE INDEX idx_photos_featured ON photos(featured) WHERE featured = TRUE;
+CREATE INDEX idx_photos_published ON photos(published_at) WHERE published_at IS NOT NULL;
+CREATE INDEX idx_photos_photographer ON photos(photographer_id);
+CREATE INDEX idx_photos_tags ON photos USING GIN(tags);
+CREATE INDEX idx_photos_created_at ON photos(created_at DESC);
+CREATE INDEX idx_photo_likes_photo_id ON photo_likes(photo_id);
+CREATE INDEX idx_photo_views_photo_id ON photo_views(photo_id);
+CREATE INDEX idx_gallery_photos_gallery ON gallery_photos(gallery_id);
+
+-- Create triggers for updated_at
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+CREATE TRIGGER update_photos_updated_at 
+  BEFORE UPDATE ON photos 
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_galleries_updated_at 
+  BEFORE UPDATE ON galleries 
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_photographers_updated_at 
+  BEFORE UPDATE ON photographers 
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 ```
 
-### Flattened API Response Revolution
+### Row Level Security (RLS) Policies
 
-The new response format eliminates nested data structures:
+```sql
+-- Enable RLS on all tables
+ALTER TABLE photographers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE photos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE galleries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE gallery_photos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE photo_likes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE photo_views ENABLE ROW LEVEL SECURITY;
+ALTER TABLE photo_comments ENABLE ROW LEVEL SECURITY;
 
-```javascript
-// Strapi v5 Response (Flattened)
-{
-  "data": {
-    "documentId": "clkgylmcc000008lcdd868feh",
-    "locale": "en",
-    "title": "Mountain Landscape",
-    "description": "Breathtaking mountain vista",
-    "image": {
-      "url": "/uploads/mountain_vista_abc123.jpg",
-      "alternativeText": "Mountain landscape at sunset",
-      "formats": {
-        "large": { "url": "/uploads/large_mountain_abc123.jpg", "width": 1000 },
-        "medium": { "url": "/uploads/medium_mountain_abc123.jpg", "width": 750 },
-        "small": { "url": "/uploads/small_mountain_abc123.jpg", "width": 500 }
-      }
-    },
-    "photographer": {
-      "documentId": "photographer123",
-      "name": "John Doe",
-      "bio": "Professional landscape photographer"
-    }
-  }
-}
+-- Photographers policies
+CREATE POLICY "Photographers are viewable by everyone" 
+  ON photographers FOR SELECT 
+  USING (true);
+
+CREATE POLICY "Photographers can update own profile" 
+  ON photographers FOR UPDATE 
+  USING (auth.uid() = id);
+
+-- Photos policies
+CREATE POLICY "Published photos are viewable by everyone" 
+  ON photos FOR SELECT 
+  USING (published_at IS NOT NULL);
+
+CREATE POLICY "Photographers can manage own photos" 
+  ON photos FOR ALL 
+  USING (auth.uid() = photographer_id);
+
+-- Galleries policies
+CREATE POLICY "Public galleries are viewable by everyone" 
+  ON galleries FOR SELECT 
+  USING (is_public = true);
+
+CREATE POLICY "Photographers can manage own galleries" 
+  ON galleries FOR ALL 
+  USING (auth.uid() = photographer_id);
+
+-- Gallery photos policies
+CREATE POLICY "Gallery photos inherit gallery permissions" 
+  ON gallery_photos FOR SELECT 
+  USING (
+    EXISTS (
+      SELECT 1 FROM galleries 
+      WHERE id = gallery_id AND is_public = true
+    )
+  );
+
+-- Photo likes policies
+CREATE POLICY "Anyone can view photo likes" 
+  ON photo_likes FOR SELECT 
+  USING (true);
+
+CREATE POLICY "Users can manage own likes" 
+  ON photo_likes FOR ALL 
+  USING (auth.uid() = user_id);
+
+-- Anonymous users can also like (using IP)
+CREATE POLICY "Anonymous users can like photos" 
+  ON photo_likes FOR INSERT 
+  WITH CHECK (
+    auth.uid() IS NULL AND 
+    ip_address IS NOT NULL
+  );
+
+-- Photo views policies (open for analytics)
+CREATE POLICY "Anyone can view photo views" 
+  ON photo_views FOR SELECT 
+  USING (true);
+
+CREATE POLICY "Anyone can insert photo views" 
+  ON photo_views FOR INSERT 
+  WITH CHECK (true);
+
+-- Comments policies
+CREATE POLICY "Anyone can view approved comments" 
+  ON photo_comments FOR SELECT 
+  USING (is_approved = true);
+
+CREATE POLICY "Users can manage own comments" 
+  ON photo_comments FOR ALL 
+  USING (auth.uid() = user_id);
 ```
 
-### Content Type Modeling for Photography
+### Database Functions
 
-```javascript
-// Photography Portfolio Content Types
-{
-  "kind": "collectionType",
-  "collectionName": "photos",
-  "info": {
-    "singularName": "photo",
-    "pluralName": "photos",
-    "displayName": "Photo"
-  },
-  "attributes": {
-    "title": { "type": "string", "required": true },
-    "description": { "type": "text" },
-    "image": { 
-      "type": "media",
-      "multiple": false,
-      "required": true,
-      "allowedTypes": ["images"]
-    },
-    "category": {
-      "type": "enumeration",
-      "enum": ["portrait", "landscape", "street", "wildlife", "macro"]
-    },
-    "featured": { "type": "boolean", "default": false },
-    "captureDate": { "type": "date" },
-    "location": { "type": "string" },
-    "cameraSettings": { 
-      "type": "component", 
-      "component": "photography.camera-settings" 
-    },
-    "tags": { 
-      "type": "relation", 
-      "relation": "manyToMany", 
-      "target": "api::tag.tag" 
-    },
-    "photographer": { 
-      "type": "relation", 
-      "relation": "manyToOne", 
-      "target": "api::photographer.photographer" 
-    }
-  }
-}
+```sql
+-- Function to increment view count
+CREATE OR REPLACE FUNCTION increment_photo_views(photo_uuid UUID, client_ip INET, client_user_agent TEXT DEFAULT NULL)
+RETURNS INTEGER AS $$
+DECLARE
+  current_views INTEGER;
+BEGIN
+  -- Insert view record
+  INSERT INTO photo_views (photo_id, ip_address, user_agent, user_id)
+  VALUES (photo_uuid, client_ip, client_user_agent, auth.uid())
+  ON CONFLICT DO NOTHING;
+  
+  -- Update photo view count
+  UPDATE photos 
+  SET view_count = view_count + 1 
+  WHERE id = photo_uuid;
+  
+  -- Return updated count
+  SELECT view_count INTO current_views 
+  FROM photos 
+  WHERE id = photo_uuid;
+  
+  RETURN current_views;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to handle photo likes
+CREATE OR REPLACE FUNCTION toggle_photo_like(photo_uuid UUID, client_ip INET DEFAULT NULL)
+RETURNS JSON AS $$
+DECLARE
+  like_record RECORD;
+  current_likes INTEGER;
+  user_liked BOOLEAN := FALSE;
+BEGIN
+  -- Check if user already liked
+  SELECT * INTO like_record 
+  FROM photo_likes 
+  WHERE photo_id = photo_uuid 
+  AND (
+    (auth.uid() IS NOT NULL AND user_id = auth.uid()) OR
+    (auth.uid() IS NULL AND ip_address = client_ip)
+  );
+  
+  IF FOUND THEN
+    -- Unlike: remove the like
+    DELETE FROM photo_likes WHERE id = like_record.id;
+    user_liked := FALSE;
+  ELSE
+    -- Like: add the like
+    INSERT INTO photo_likes (photo_id, user_id, ip_address)
+    VALUES (photo_uuid, auth.uid(), client_ip);
+    user_liked := TRUE;
+  END IF;
+  
+  -- Update photo like count
+  SELECT COUNT(*) INTO current_likes 
+  FROM photo_likes 
+  WHERE photo_id = photo_uuid;
+  
+  UPDATE photos 
+  SET like_count = current_likes 
+  WHERE id = photo_uuid;
+  
+  RETURN json_build_object(
+    'liked', user_liked,
+    'like_count', current_likes
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to get featured photos
+CREATE OR REPLACE FUNCTION get_featured_photos(limit_count INTEGER DEFAULT 10)
+RETURNS TABLE (
+  id UUID,
+  title TEXT,
+  description TEXT,
+  image_url TEXT,
+  thumbnail_url TEXT,
+  category photo_category,
+  like_count INTEGER,
+  view_count INTEGER,
+  photographer_name TEXT,
+  created_at TIMESTAMP WITH TIME ZONE
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    p.id,
+    p.title,
+    p.description,
+    p.image_url,
+    p.thumbnail_url,
+    p.category,
+    p.like_count,
+    p.view_count,
+    ph.name as photographer_name,
+    p.created_at
+  FROM photos p
+  LEFT JOIN photographers ph ON p.photographer_id = ph.id
+  WHERE p.featured = TRUE 
+  AND p.published_at IS NOT NULL
+  ORDER BY p.created_at DESC
+  LIMIT limit_count;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 ```
 
-### Enhanced Media Library Configuration
+### Real-time Setup
 
-```javascript
-// config/plugins.js - Optimized for photography
-module.exports = ({ env }) => ({
-  upload: {
-    config: {
-      breakpoints: {
-        xlarge: 1920,
-        large: 1000,
-        medium: 750,
-        small: 500,
-        xsmall: 64
-      },
-      responsiveDimensions: true,
-      provider: 'cloudinary',
-      providerOptions: {
-        cloud_name: env('CLOUDINARY_CLOUD_NAME'),
-        api_key: env('CLOUDINARY_API_KEY'),
-        api_secret: env('CLOUDINARY_API_SECRET'),
-      },
-      actionOptions: {
-        upload: {
-          quality: 'auto:best',
-          fetch_format: 'auto'
-        },
-        delete: {},
-      },
-    },
-  },
-});
+Enable real-time on relevant tables:
+
+```sql
+-- Enable real-time for photos table
+ALTER publication supabase_realtime ADD TABLE photos;
+ALTER publication supabase_realtime ADD TABLE photo_likes;
+ALTER publication supabase_realtime ADD TABLE photo_views;
+ALTER publication supabase_realtime ADD TABLE photo_comments;
 ```
 
 ## Vue 3 Modern Integration Patterns
 
-### Composition API with TypeScript Integration
+### Supabase Client Configuration
+
+```typescript
+// src/lib/supabase.ts
+import { createClient } from '@supabase/supabase-js'
+import type { Database } from '@/types/database'
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  realtime: {
+    params: {
+      eventsPerSecond: 10, // Limit real-time events
+    },
+  },
+})
+
+// Storage helpers
+export const getImageUrl = (path: string) => {
+  const { data } = supabase.storage.from('photos').getPublicUrl(path)
+  return data.publicUrl
+}
+
+export const uploadImage = async (file: File, path: string) => {
+  const { data, error } = await supabase.storage
+    .from('photos')
+    .upload(path, file, {
+      cacheControl: '3600',
+      upsert: false
+    })
+  
+  if (error) throw error
+  return data
+}
+```
+
+### Modern TypeScript Type Definitions
+
+```typescript
+// types/database.ts - Auto-generated from Supabase
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
+
+export interface Database {
+  public: {
+    Tables: {
+      photos: {
+        Row: {
+          id: string
+          title: string
+          description: string | null
+          slug: string
+          image_url: string
+          image_metadata: Json
+          thumbnail_url: string | null
+          category: 'portrait' | 'landscape' | 'street' | 'wildlife' | 'macro' | 'wedding' | 'event'
+          tags: string[]
+          featured: boolean
+          camera_settings: Json
+          location: string | null
+          location_coordinates: unknown | null
+          capture_date: string | null
+          view_count: number
+          like_count: number
+          photographer_id: string | null
+          created_at: string
+          updated_at: string
+          published_at: string | null
+        }
+        Insert: {
+          id?: string
+          title: string
+          description?: string | null
+          slug: string
+          image_url: string
+          image_metadata?: Json
+          thumbnail_url?: string | null
+          category: 'portrait' | 'landscape' | 'street' | 'wildlife' | 'macro' | 'wedding' | 'event'
+          tags?: string[]
+          featured?: boolean
+          camera_settings?: Json
+          location?: string | null
+          location_coordinates?: unknown | null
+          capture_date?: string | null
+          view_count?: number
+          like_count?: number
+          photographer_id?: string | null
+          created_at?: string
+          updated_at?: string
+          published_at?: string | null
+        }
+        Update: {
+          id?: string
+          title?: string
+          description?: string | null
+          slug?: string
+          image_url?: string
+          image_metadata?: Json
+          thumbnail_url?: string | null
+          category?: 'portrait' | 'landscape' | 'street' | 'wildlife' | 'macro' | 'wedding' | 'event'
+          tags?: string[]
+          featured?: boolean
+          camera_settings?: Json
+          location?: string | null
+          location_coordinates?: unknown | null
+          capture_date?: string | null
+          view_count?: number
+          like_count?: number
+          photographer_id?: string | null
+          created_at?: string
+          updated_at?: string
+          published_at?: string | null
+        }
+      }
+      photographers: {
+        Row: {
+          id: string
+          email: string
+          name: string
+          bio: string | null
+          avatar_url: string | null
+          website_url: string | null
+          social_links: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          email: string
+          name: string
+          bio?: string | null
+          avatar_url?: string | null
+          website_url?: string | null
+          social_links?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          email?: string
+          name?: string
+          bio?: string | null
+          avatar_url?: string | null
+          website_url?: string | null
+          social_links?: Json
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      // ... other tables
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      increment_photo_views: {
+        Args: {
+          photo_uuid: string
+          client_ip: unknown
+          client_user_agent?: string
+        }
+        Returns: number
+      }
+      toggle_photo_like: {
+        Args: {
+          photo_uuid: string
+          client_ip?: unknown
+        }
+        Returns: Json
+      }
+      get_featured_photos: {
+        Args: {
+          limit_count?: number
+        }
+        Returns: {
+          id: string
+          title: string
+          description: string
+          image_url: string
+          thumbnail_url: string
+          category: string
+          like_count: number
+          view_count: number
+          photographer_name: string
+          created_at: string
+        }[]
+      }
+    }
+    Enums: {
+      photo_category: 'portrait' | 'landscape' | 'street' | 'wildlife' | 'macro' | 'wedding' | 'event'
+    }
+  }
+}
+
+// Application types
+export interface Photo {
+  id: string
+  title: string
+  description?: string
+  slug: string
+  image_url: string
+  thumbnail_url?: string
+  category: Database['public']['Enums']['photo_category']
+  tags: string[]
+  featured: boolean
+  camera_settings?: CameraSettings
+  location?: string
+  capture_date?: string
+  view_count: number
+  like_count: number
+  photographer?: Photographer
+  created_at: string
+  updated_at: string
+  published_at?: string
+}
+
+export interface CameraSettings {
+  camera?: string
+  lens?: string
+  aperture?: string
+  shutterSpeed?: string
+  iso?: number
+  focalLength?: string
+}
+
+export interface Photographer {
+  id: string
+  name: string
+  bio?: string
+  avatar_url?: string
+  website_url?: string
+}
+```
+
+### Composition API with Supabase Integration
 
 ```typescript
 // composables/usePhotos.ts
 import { ref, computed } from 'vue'
-import type { Photo, StrapiCollectionResponse } from '@/types/strapi'
+import { supabase } from '@/lib/supabase'
+import type { Photo } from '@/types/database'
 
 export function usePhotos() {
   const photos = ref<Photo[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  const strapiClient = {
-    async fetchPhotos(params?: StrapiRequestParams): Promise<Photo[]> {
-      loading.value = true
-      error.value = null
-      
-      try {
-        const query = new URLSearchParams()
-        if (params?.filters) query.append('filters', JSON.stringify(params.filters))
-        if (params?.sort) query.append('sort', params.sort)
-        if (params?.populate) query.append('populate', '*')
-        
-        const response = await fetch(`${STRAPI_URL}/api/photos?${query}`, {
-          headers: {
-            'Authorization': `Bearer ${STRAPI_TOKEN}`,
-            'Content-Type': 'application/json'
-          }
-        })
-        
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-        
-        const data: StrapiCollectionResponse<Photo> = await response.json()
-        photos.value = data.data
-        return data.data
-      } catch (err) {
-        error.value = err instanceof Error ? err.message : 'Failed to fetch photos'
-        throw err
-      } finally {
-        loading.value = false
+  const fetchPhotos = async (filters: {
+    category?: string
+    featured?: boolean
+    limit?: number
+    sort?: string
+  } = {}) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      let query = supabase
+        .from('photos')
+        .select(`
+          *,
+          photographer:photographers(name, avatar_url),
+          galleries:gallery_photos(gallery_id)
+        `)
+        .not('published_at', 'is', null)
+        .order('created_at', { ascending: false })
+
+      // Apply filters
+      if (filters.category) {
+        query = query.eq('category', filters.category)
       }
+      
+      if (filters.featured) {
+        query = query.eq('featured', true)
+      }
+      
+      if (filters.limit) {
+        query = query.limit(filters.limit)
+      }
+
+      const { data, error: fetchError } = await query
+
+      if (fetchError) throw fetchError
+      
+      photos.value = data as Photo[]
+      return data as Photo[]
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Failed to fetch photos'
+      throw err
+    } finally {
+      loading.value = false
     }
   }
 
@@ -300,58 +811,106 @@ export function usePhotos() {
     error: computed(() => error.value),
     featuredPhotos,
     photosByCategory,
-    fetchPhotos: strapiClient.fetchPhotos
+    fetchPhotos
   }
 }
 ```
 
-### Modern TypeScript Type Definitions
+### Real-Time Photo Service
 
 ```typescript
-// types/strapi.ts
-export interface StrapiSystemFields {
-  documentId: string
-  createdAt: string
-  updatedAt: string
-  publishedAt?: string
-  locale?: string
-}
+// services/photoService.ts
+import { supabase } from '@/lib/supabase'
+import type { Photo, PhotoFilters } from '@/types/photo'
 
-export interface Photo extends StrapiSystemFields {
-  title: string
-  description?: string
-  image: StrapiMedia
-  category: 'portrait' | 'landscape' | 'street' | 'wildlife' | 'macro'
-  featured: boolean
-  captureDate?: string
-  location?: string
-  tags?: Tag[]
-  photographer?: Photographer
-  cameraSettings?: CameraSettings
-}
+export class PhotoService {
+  static async getPhotos(filters: PhotoFilters = {}) {
+    let query = supabase
+      .from('photos')
+      .select(`
+        *,
+        photographer:photographers(name, avatar_url),
+        galleries:gallery_photos(gallery_id)
+      `)
+      .not('published_at', 'is', null)
+      .order('created_at', { ascending: false })
 
-export interface StrapiMedia {
-  url: string
-  alternativeText?: string
-  caption?: string
-  width?: number
-  height?: number
-  formats?: {
-    thumbnail?: MediaFormat
-    small?: MediaFormat
-    medium?: MediaFormat
-    large?: MediaFormat
-    xlarge?: MediaFormat
+    // Apply filters
+    if (filters.category) {
+      query = query.eq('category', filters.category)
+    }
+    
+    if (filters.featured) {
+      query = query.eq('featured', true)
+    }
+    
+    if (filters.photographer_id) {
+      query = query.eq('photographer_id', filters.photographer_id)
+    }
+    
+    if (filters.tags?.length) {
+      query = query.overlaps('tags', filters.tags)
+    }
+    
+    if (filters.limit) {
+      query = query.limit(filters.limit)
+    }
+
+    const { data, error } = await query
+
+    if (error) throw error
+    return data as Photo[]
   }
-}
 
-export interface CameraSettings {
-  camera: string
-  lens: string
-  aperture: string
-  shutterSpeed: string
-  iso: number
-  focalLength: string
+  static async getPhoto(id: string) {
+    const { data, error } = await supabase
+      .from('photos')
+      .select(`
+        *,
+        photographer:photographers(*),
+        galleries:gallery_photos(
+          gallery:galleries(*)
+        )
+      `)
+      .eq('id', id)
+      .single()
+
+    if (error) throw error
+    return data as Photo
+  }
+
+  static async incrementViews(photoId: string) {
+    const { data, error } = await supabase.rpc('increment_photo_views', {
+      photo_uuid: photoId,
+      client_ip: '192.168.1.1', // Get from request in production
+      client_user_agent: navigator.userAgent
+    })
+
+    if (error) throw error
+    return data
+  }
+
+  static async toggleLike(photoId: string) {
+    const { data, error } = await supabase.rpc('toggle_photo_like', {
+      photo_uuid: photoId,
+      client_ip: '192.168.1.1' // Get from request in production
+    })
+
+    if (error) throw error
+    return data
+  }
+
+  static async searchPhotos(searchTerm: string) {
+    const { data, error } = await supabase
+      .from('photos')
+      .select('*')
+      .or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
+      .not('published_at', 'is', null)
+      .limit(20)
+
+    if (error) throw error
+    return data as Photo[]
+  }
 }
 ```
 
@@ -361,10 +920,13 @@ export interface CameraSettings {
 // stores/portfolio.ts
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { usePhotos } from '@/composables/usePhotos'
+import { PhotoService } from '@/services/photoService'
+import type { Photo } from '@/types/database'
 
 export const usePortfolioStore = defineStore('portfolio', () => {
-  const { photos, loading, error, fetchPhotos, featuredPhotos } = usePhotos()
+  const photos = ref<Photo[]>([])
+  const loading = ref(false)
+  const error = ref<string | null>(null)
   
   const activeCategory = ref<string>('all')
   const searchQuery = ref<string>('')
@@ -385,12 +947,26 @@ export const usePortfolioStore = defineStore('portfolio', () => {
     
     return filtered
   })
+
+  const featuredPhotos = computed(() => {
+    return photos.value.filter(photo => photo.featured)
+  })
   
-  const loadPortfolio = async () => {
-    await fetchPhotos({
-      populate: ['photographer', 'tags', 'image'],
-      sort: 'captureDate:desc'
-    })
+  const loadPortfolio = async (filters = {}) => {
+    loading.value = true
+    error.value = null
+
+    try {
+      const data = await PhotoService.getPhotos({
+        ...filters,
+        sort: 'created_at:desc'
+      })
+      photos.value = data
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Failed to load portfolio'
+    } finally {
+      loading.value = false
+    }
   }
   
   const setCategory = (category: string) => {
@@ -405,8 +981,8 @@ export const usePortfolioStore = defineStore('portfolio', () => {
     photos,
     loading,
     error,
-    featuredPhotos,
     filteredPhotos,
+    featuredPhotos,
     activeCategory: computed(() => activeCategory.value),
     searchQuery: computed(() => searchQuery.value),
     loadPortfolio,
@@ -414,6 +990,145 @@ export const usePortfolioStore = defineStore('portfolio', () => {
     setSearchQuery
   }
 })
+```
+
+## Real-Time Architecture with Supabase
+
+### Real-time Composable
+
+```typescript
+// src/composables/useRealtimePhotos.ts
+import { ref, onMounted, onUnmounted } from 'vue'
+import { supabase } from '@/lib/supabase'
+import type { RealtimeChannel } from '@supabase/supabase-js'
+import type { Photo } from '@/types/database'
+
+export function useRealtimePhotos() {
+  const photos = ref<Photo[]>([])
+  const loading = ref(false)
+  const error = ref<string | null>(null)
+  
+  let photosChannel: RealtimeChannel | null = null
+  let likesChannel: RealtimeChannel | null = null
+
+  const setupRealtimeSubscriptions = () => {
+    // Subscribe to photo changes
+    photosChannel = supabase
+      .channel('photos-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'photos'
+        },
+        (payload) => {
+          console.log('Photo change:', payload)
+          handlePhotoChange(payload)
+        }
+      )
+      .subscribe()
+
+    // Subscribe to like changes
+    likesChannel = supabase
+      .channel('likes-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'photo_likes'
+        },
+        (payload) => {
+          console.log('Like change:', payload)
+          handleLikeChange(payload)
+        }
+      )
+      .subscribe()
+  }
+
+  const handlePhotoChange = (payload: any) => {
+    const { eventType, new: newRecord, old: oldRecord } = payload
+
+    switch (eventType) {
+      case 'INSERT':
+        if (newRecord.published_at) {
+          photos.value.unshift(newRecord)
+        }
+        break
+      
+      case 'UPDATE':
+        const index = photos.value.findIndex(p => p.id === newRecord.id)
+        if (index > -1) {
+          photos.value[index] = { ...photos.value[index], ...newRecord }
+        }
+        break
+      
+      case 'DELETE':
+        const deleteIndex = photos.value.findIndex(p => p.id === oldRecord.id)
+        if (deleteIndex > -1) {
+          photos.value.splice(deleteIndex, 1)
+        }
+        break
+    }
+  }
+
+  const handleLikeChange = (payload: any) => {
+    const { eventType, new: newRecord, old: oldRecord } = payload
+    const photoId = newRecord?.photo_id || oldRecord?.photo_id
+
+    if (!photoId) return
+
+    // Update like count in photos array
+    const photo = photos.value.find(p => p.id === photoId)
+    if (photo) {
+      if (eventType === 'INSERT') {
+        photo.like_count++
+      } else if (eventType === 'DELETE') {
+        photo.like_count = Math.max(0, photo.like_count - 1)
+      }
+    }
+  }
+
+  const loadPhotos = async (filters = {}) => {
+    loading.value = true
+    error.value = null
+
+    try {
+      const data = await PhotoService.getPhotos(filters)
+      photos.value = data
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Failed to load photos'
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const cleanup = () => {
+    if (photosChannel) {
+      supabase.removeChannel(photosChannel)
+    }
+    if (likesChannel) {
+      supabase.removeChannel(likesChannel)
+    }
+  }
+
+  onMounted(() => {
+    setupRealtimeSubscriptions()
+  })
+
+  onUnmounted(() => {
+    cleanup()
+  })
+
+  return {
+    photos,
+    loading,
+    error,
+    loadPhotos,
+    cleanup
+  }
+}
 ```
 
 ## Advanced Performance Optimizations
@@ -428,7 +1143,7 @@ export const usePortfolioStore = defineStore('portfolio', () => {
       v-if="!isLoaded"
       class="placeholder bg-gray-200 animate-pulse"
       :style="{ 
-        paddingBottom: `${(photo.image.height / photo.image.width) * 100}%` 
+        paddingBottom: `${(photo.image_metadata?.height / photo.image_metadata?.width) * 100}%` 
       }"
     >
       <div class="absolute inset-0 flex items-center justify-center">
@@ -439,7 +1154,7 @@ export const usePortfolioStore = defineStore('portfolio', () => {
     <img
       ref="imageRef"
       :src="isIntersecting ? optimizedSrc : ''"
-      :alt="photo.image.alternativeText || photo.title"
+      :alt="photo.title"
       :width="displayWidth"
       :height="displayHeight"
       @load="onLoad"
@@ -452,8 +1167,8 @@ export const usePortfolioStore = defineStore('portfolio', () => {
       <div class="absolute bottom-0 left-0 right-0 p-4 text-white">
         <h3 class="font-semibold text-lg">{{ photo.title }}</h3>
         <p v-if="photo.description" class="text-sm mt-1 opacity-90">{{ photo.description }}</p>
-        <div v-if="photo.cameraSettings" class="text-xs mt-2 opacity-75">
-          {{ photo.cameraSettings.camera }} • {{ photo.cameraSettings.lens }}
+        <div v-if="photo.camera_settings" class="text-xs mt-2 opacity-75">
+          {{ photo.camera_settings.camera }} • {{ photo.camera_settings.lens }}
         </div>
       </div>
     </div>
@@ -462,7 +1177,8 @@ export const usePortfolioStore = defineStore('portfolio', () => {
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import type { Photo } from '@/types/strapi'
+import { getImageUrl } from '@/lib/supabase'
+import type { Photo } from '@/types/database'
 
 interface Props {
   photo: Photo
@@ -482,21 +1198,19 @@ const isIntersecting = ref(false)
 const isLoaded = ref(false)
 const observer = ref<IntersectionObserver>()
 
-const STRAPI_URL = import.meta.env.VITE_STRAPI_URL || 'http://localhost:1337'
-
 const optimizedSrc = computed(() => {
-  if (props.photo.image.formats?.[props.size]) {
-    return `${STRAPI_URL}${props.photo.image.formats[props.size].url}`
+  if (props.photo.thumbnail_url && props.size === 'small') {
+    return getImageUrl(props.photo.thumbnail_url)
   }
-  return `${STRAPI_URL}${props.photo.image.url}`
+  return getImageUrl(props.photo.image_url)
 })
 
 const displayWidth = computed(() => {
-  return props.photo.image.formats?.[props.size]?.width || props.photo.image.width || 800
+  return props.photo.image_metadata?.width || 800
 })
 
 const displayHeight = computed(() => {
-  return props.photo.image.formats?.[props.size]?.height || props.photo.image.height || 600
+  return props.photo.image_metadata?.height || 600
 })
 
 const onLoad = () => {
@@ -573,8 +1287,9 @@ export default defineConfig({
         
         manualChunks: {
           'vue-ecosystem': ['vue', 'vue-router', 'pinia'],
+          'supabase': ['@supabase/supabase-js'],
           'ui-components': ['@headlessui/vue', '@heroicons/vue'],
-          'utils': ['axios', '@vueuse/core']
+          'utils': ['@vueuse/core']
         }
       }
     },
@@ -584,7 +1299,7 @@ export default defineConfig({
   },
   
   optimizeDeps: {
-    include: ['vue', '@vueuse/core', 'pinia'],
+    include: ['vue', '@vueuse/core', 'pinia', '@supabase/supabase-js'],
     exclude: ['@tailwindcss/vite']
   }
 })
@@ -594,7 +1309,7 @@ export default defineConfig({
 
 ```json
 {
-  "name": "vue3-photography-portfolio",
+  "name": "vue3-photography-portfolio-supabase",
   "version": "2.0.0",
   "type": "module",
   "scripts": {
@@ -603,7 +1318,8 @@ export default defineConfig({
     "preview": "vite preview",
     "analyze": "vite build --mode analyze",
     "lint": "eslint . --ext .vue,.js,.ts --fix",
-    "type-check": "vue-tsc --noEmit"
+    "type-check": "vue-tsc --noEmit",
+    "supabase:types": "supabase gen types typescript --project-id YOUR_PROJECT_ID --schema public > src/types/database.ts"
   },
   "dependencies": {
     "vue": "^3.4.0",
@@ -612,7 +1328,7 @@ export default defineConfig({
     "pinia-plugin-persistedstate": "^3.2.1",
     "@vueuse/core": "^10.5.0",
     "@vueuse/head": "^2.0.0",
-    "axios": "^1.6.0"
+    "@supabase/supabase-js": "^2.39.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^4.5.0",
@@ -627,543 +1343,13 @@ export default defineConfig({
   },
   "engines": {
     "node": ">=18.0.0",
-    "npm": ">=9.0.0"
-  }
-}
-```
-
-## Real-Time Architecture with WebSockets and Server-Sent Events
-
-### Why Real-Time for Photography Portfolios?
-
-Real-time features transform a static portfolio into an engaging, interactive experience:
-
-- **Live Reactions**: Instant likes and comments on photos
-- **Real-Time Analytics**: Live visitor counts and engagement metrics
-- **Upload Progress**: Live photo upload progress and processing status
-- **Gallery Updates**: Instant updates when new photos are added
-- **Collaborative Features**: Real-time feedback from clients and collaborators
-- **Live Events**: Real-time photo streams from events or shoots
-
-### Technology Decision: WebSockets vs Server-Sent Events
-
-**WebSockets**: Bi-directional, perfect for interactive features
-- Photo likes/reactions
-- Live comments and chat
-- Collaborative editing
-- Real-time notifications
-
-**Server-Sent Events (SSE)**: Unidirectional, ideal for live updates
-- Gallery updates
-- Upload progress
-- Analytics dashboards
-- System notifications
-
-### Strapi v5 Real-Time Setup
-
-#### WebSocket Configuration with Socket.IO
-
-```bash
-# Install WebSocket dependencies in Strapi
-cd backend
-npm install socket.io @strapi/plugin-io cors
-```
-
-**Create WebSocket Hook (Strapi v5):**
-
-```javascript
-// backend/src/hooks/socket-io/index.js
-const { Server } = require('socket.io')
-
-module.exports = ({ strapi }) => {
-  return {
-    async register() {
-      // Socket.IO will be initialized after server starts
-    },
-
-    async bootstrap() {
-      const io = new Server(strapi.server.httpServer, {
-        cors: {
-          origin: process.env.CLIENT_URL || "http://localhost:3000",
-          methods: ["GET", "POST"],
-          credentials: true
-        },
-        transports: ['websocket', 'polling']
-      })
-
-      // Authentication middleware
-      io.use(async (socket, next) => {
-        try {
-          const token = socket.handshake.auth.token
-          if (token) {
-            const decoded = await strapi.plugins['users-permissions'].services.jwt.verify(token)
-            socket.userId = decoded.id
-            socket.user = await strapi.entityService.findOne('plugin::users-permissions.user', decoded.id)
-          }
-          next()
-        } catch (err) {
-          next(err)
-        }
-      })
-
-      // Store io instance globally
-      strapi.io = io
-
-      // Connection handling
-      io.on('connection', (socket) => {
-        console.log(`User connected: ${socket.userId || 'anonymous'}`)
-
-        // Join user to their personal room
-        if (socket.userId) {
-          socket.join(`user:${socket.userId}`)
-        }
-
-        // Photo interaction events
-        socket.on('photo:like', async (data) => {
-          try {
-            const { photoId } = data
-            const userId = socket.userId
-
-            if (!userId) {
-              socket.emit('error', { message: 'Authentication required' })
-              return
-            }
-
-            // Toggle like in database
-            const existingLike = await strapi.db.query('api::like.like').findOne({
-              where: { photo: photoId, user: userId }
-            })
-
-            let likeCount
-            if (existingLike) {
-              await strapi.db.query('api::like.like').delete({ where: { id: existingLike.id } })
-              likeCount = await strapi.db.query('api::like.like').count({ where: { photo: photoId } })
-              socket.emit('photo:unliked', { photoId, likeCount })
-            } else {
-              await strapi.db.query('api::like.like').create({
-                data: { photo: photoId, user: userId }
-              })
-              likeCount = await strapi.db.query('api::like.like').count({ where: { photo: photoId } })
-              socket.emit('photo:liked', { photoId, likeCount })
-            }
-
-            // Broadcast to all clients
-            socket.broadcast.emit('photo:like-update', { photoId, likeCount })
-
-          } catch (error) {
-            socket.emit('error', { message: 'Failed to process like' })
-          }
-        })
-
-        // Real-time view tracking
-        socket.on('photo:view', async (data) => {
-          try {
-            const { photoId } = data
-            
-            // Increment view count
-            await strapi.db.query('api::photo.photo').update({
-              where: { documentId: photoId },
-              data: { viewCount: { $inc: 1 } }
-            })
-
-            // Broadcast view count update
-            const photo = await strapi.entityService.findOne('api::photo.photo', photoId, {
-              fields: ['viewCount']
-            })
-
-            io.emit('photo:view-update', { 
-              photoId, 
-              viewCount: photo.viewCount 
-            })
-
-          } catch (error) {
-            console.error('View tracking error:', error)
-          }
-        })
-
-        // Disconnection handling
-        socket.on('disconnect', () => {
-          console.log(`User disconnected: ${socket.userId || 'anonymous'}`)
-        })
-      })
-
-      console.log('Socket.IO server initialized')
-    }
-  }
-}
-```
-
-#### Server-Sent Events Setup
-
-```javascript
-// backend/src/api/events/routes/events.js
-module.exports = {
-  routes: [
-    {
-      method: 'GET',
-      path: '/events/stream',
-      handler: 'events.stream',
-      config: {
-        auth: false // or configure as needed
-      }
-    }
-  ]
-}
-```
-
-```javascript
-// backend/src/api/events/controllers/events.js
-module.exports = ({ strapi }) => ({
-  async stream(ctx) {
-    ctx.request.socket.setTimeout(0)
-    ctx.req.socket.setNoDelay(true)
-    ctx.req.socket.setKeepAlive(true)
-
-    ctx.set({
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Cache-Control'
-    })
-
-    // Send initial connection event
-    ctx.res.write('data: {"type":"connected","message":"SSE connected"}\n\n')
-
-    // Store client for broadcasting
-    const clientId = Date.now().toString()
-    strapi.sseClients = strapi.sseClients || new Map()
-    strapi.sseClients.set(clientId, ctx.res)
-
-    // Cleanup on disconnect
-    ctx.req.on('close', () => {
-      strapi.sseClients.delete(clientId)
-    })
-
-    ctx.req.on('finish', () => {
-      strapi.sseClients.delete(clientId)
-    })
-
-    ctx.req.on('error', () => {
-      strapi.sseClients.delete(clientId)
-    })
-  }
-})
-```
-
-#### Lifecycle Hooks for Real-Time Updates
-
-```javascript
-// backend/src/api/photo/content-types/photo/lifecycles.js
-module.exports = {
-  async afterCreate(event) {
-    const { result } = event
-
-    // Broadcast new photo via SSE
-    if (strapi.sseClients) {
-      const message = JSON.stringify({
-        type: 'photo:created',
-        data: {
-          documentId: result.documentId,
-          title: result.title,
-          category: result.category,
-          featured: result.featured
-        }
-      })
-
-      strapi.sseClients.forEach((client) => {
-        try {
-          client.write(`data: ${message}\n\n`)
-        } catch (error) {
-          console.error('SSE write error:', error)
-        }
-      })
-    }
-
-    // Broadcast via WebSocket
-    if (strapi.io) {
-      strapi.io.emit('gallery:new-photo', {
-        photo: result
-      })
-    }
+    "pnpm": ">=8.0.0"
   },
-
-  async afterUpdate(event) {
-    const { result } = event
-
-    // Broadcast photo update
-    if (strapi.io) {
-      strapi.io.emit('photo:updated', {
-        photoId: result.documentId,
-        data: result
-      })
-    }
-  },
-
-  async afterDelete(event) {
-    const { result } = event
-
-    // Broadcast photo deletion
-    if (strapi.io) {
-      strapi.io.emit('photo:deleted', {
-        photoId: result.documentId
-      })
-    }
-  }
+  "packageManager": "pnpm@8.10.0"
 }
 ```
 
-### Vue 3 Real-Time Implementation
-
-#### WebSocket Composable
-
-```typescript
-// src/composables/useWebSocket.ts
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
-import { io, Socket } from 'socket.io-client'
-
-interface WebSocketState {
-  connected: boolean
-  error: string | null
-  reconnecting: boolean
-  reconnectAttempts: number
-}
-
-export function useWebSocket(url?: string, token?: string) {
-  const socket = ref<Socket | null>(null)
-  const state = reactive<WebSocketState>({
-    connected: false,
-    error: null,
-    reconnecting: false,
-    reconnectAttempts: 0
-  })
-
-  const connect = () => {
-    const socketUrl = url || import.meta.env.VITE_STRAPI_URL || 'http://localhost:1337'
-    
-    socket.value = io(socketUrl, {
-      auth: token ? { token } : undefined,
-      autoConnect: false,
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionAttempts: 5,
-      timeout: 20000
-    })
-
-    // Connection events
-    socket.value.on('connect', () => {
-      state.connected = true
-      state.error = null
-      state.reconnecting = false
-      state.reconnectAttempts = 0
-      console.log('WebSocket connected')
-    })
-
-    socket.value.on('disconnect', (reason) => {
-      state.connected = false
-      console.log('WebSocket disconnected:', reason)
-    })
-
-    socket.value.on('connect_error', (error) => {
-      state.error = error.message
-      state.reconnectAttempts++
-      console.error('WebSocket connection error:', error)
-    })
-
-    socket.value.on('reconnect', (attemptNumber) => {
-      state.reconnecting = false
-      state.reconnectAttempts = attemptNumber
-      console.log('WebSocket reconnected after', attemptNumber, 'attempts')
-    })
-
-    socket.value.on('reconnect_attempt', (attemptNumber) => {
-      state.reconnecting = true
-      state.reconnectAttempts = attemptNumber
-      console.log('WebSocket reconnecting... attempt', attemptNumber)
-    })
-
-    socket.value.on('reconnect_failed', () => {
-      state.reconnecting = false
-      state.error = 'Failed to reconnect after maximum attempts'
-      console.error('WebSocket reconnection failed')
-    })
-
-    socket.value.connect()
-  }
-
-  const disconnect = () => {
-    if (socket.value) {
-      socket.value.disconnect()
-      socket.value = null
-    }
-  }
-
-  const emit = (event: string, data?: any) => {
-    if (socket.value && state.connected) {
-      socket.value.emit(event, data)
-    } else {
-      console.warn('Cannot emit: WebSocket not connected')
-    }
-  }
-
-  const on = (event: string, callback: (...args: any[]) => void) => {
-    if (socket.value) {
-      socket.value.on(event, callback)
-    }
-  }
-
-  const off = (event: string, callback?: (...args: any[]) => void) => {
-    if (socket.value) {
-      socket.value.off(event, callback)
-    }
-  }
-
-  onMounted(() => {
-    connect()
-  })
-
-  onUnmounted(() => {
-    disconnect()
-  })
-
-  return {
-    socket: socket.value,
-    state,
-    connect,
-    disconnect,
-    emit,
-    on,
-    off
-  }
-}
-```
-
-#### Server-Sent Events Composable
-
-```typescript
-// src/composables/useServerSentEvents.ts
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
-
-interface SSEState {
-  connected: boolean
-  error: string | null
-  reconnecting: boolean
-  lastEventId: string | null
-}
-
-interface SSEEvent {
-  type: string
-  data: any
-  id?: string
-  timestamp: Date
-}
-
-export function useServerSentEvents(url: string) {
-  const eventSource = ref<EventSource | null>(null)
-  const events = ref<SSEEvent[]>([])
-  const state = reactive<SSEState>({
-    connected: false,
-    error: null,
-    reconnecting: false,
-    lastEventId: null
-  })
-
-  const connect = () => {
-    try {
-      eventSource.value = new EventSource(url)
-
-      eventSource.value.onopen = () => {
-        state.connected = true
-        state.error = null
-        state.reconnecting = false
-        console.log('SSE connected')
-      }
-
-      eventSource.value.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data)
-          const sseEvent: SSEEvent = {
-            type: data.type || 'message',
-            data: data.data || data,
-            id: event.lastEventId,
-            timestamp: new Date()
-          }
-          
-          events.value.push(sseEvent)
-          state.lastEventId = event.lastEventId
-          
-          // Keep only last 100 events to prevent memory leaks
-          if (events.value.length > 100) {
-            events.value = events.value.slice(-100)
-          }
-        } catch (error) {
-          console.error('Failed to parse SSE data:', error)
-        }
-      }
-
-      eventSource.value.onerror = (error) => {
-        state.connected = false
-        console.error('SSE error:', error)
-
-        if (eventSource.value?.readyState === EventSource.CLOSED) {
-          state.error = 'Connection closed'
-          scheduleReconnect()
-        }
-      }
-
-    } catch (error) {
-      state.error = 'Failed to create SSE connection'
-      console.error('SSE creation error:', error)
-    }
-  }
-
-  const scheduleReconnect = () => {
-    if (state.reconnecting) return
-
-    state.reconnecting = true
-    setTimeout(() => {
-      if (eventSource.value?.readyState === EventSource.CLOSED) {
-        connect()
-      }
-    }, 3000) // Reconnect after 3 seconds
-  }
-
-  const disconnect = () => {
-    if (eventSource.value) {
-      eventSource.value.close()
-      eventSource.value = null
-    }
-    state.connected = false
-  }
-
-  const getEventsByType = (type: string) => {
-    return events.value.filter(event => event.type === type)
-  }
-
-  const clearEvents = () => {
-    events.value = []
-  }
-
-  onMounted(() => {
-    connect()
-  })
-
-  onUnmounted(() => {
-    disconnect()
-  })
-
-  return {
-    events,
-    state,
-    connect,
-    disconnect,
-    getEventsByType,
-    clearEvents
-  }
-}
-```
-
-#### Real-Time Photo Gallery Component
+## Real-Time Photo Gallery Component
 
 ```vue
 <!-- src/components/Gallery/RealTimeGallery.vue -->
@@ -1188,13 +1374,13 @@ export function useServerSentEvents(url: string) {
       <TransitionGroup name="photo" tag="div" class="contents">
         <div
           v-for="photo in photos"
-          :key="photo.documentId"
+          :key="photo.id"
           class="photo-card group relative cursor-pointer rounded-lg overflow-hidden bg-gray-100 hover:shadow-xl transition-all duration-300"
           @click="openLightbox(photo)"
         >
           <img
-            :src="getPhotoUrl(photo)"
-            :alt="photo.image.alternativeText || photo.title"
+            :src="getImageUrl(photo.thumbnail_url || photo.image_url)"
+            :alt="photo.title"
             class="w-full h-64 object-cover"
             loading="lazy"
           />
@@ -1203,11 +1389,11 @@ export function useServerSentEvents(url: string) {
           <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-300">
             <!-- Like Button -->
             <button
-              @click.stop="toggleLike(photo.documentId)"
+              @click.stop="toggleLike(photo.id)"
               class="absolute top-3 right-3 p-2 rounded-full bg-white bg-opacity-80 hover:bg-opacity-100 transition-all"
-              :class="{ 'text-red-500': isLiked(photo.documentId), 'text-gray-600': !isLiked(photo.documentId) }"
+              :class="{ 'text-red-500': isLiked(photo.id), 'text-gray-600': !isLiked(photo.id) }"
             >
-              <HeartIcon class="w-5 h-5" :filled="isLiked(photo.documentId)" />
+              <HeartIcon class="w-5 h-5" :filled="isLiked(photo.id)" />
             </button>
 
             <!-- Real-time Stats -->
@@ -1220,11 +1406,11 @@ export function useServerSentEvents(url: string) {
                 <div class="text-right text-xs">
                   <div class="flex items-center space-x-1">
                     <HeartIcon class="w-3 h-3" />
-                    <span>{{ getLikeCount(photo.documentId) }}</span>
+                    <span>{{ photo.like_count }}</span>
                   </div>
                   <div class="flex items-center space-x-1 mt-1">
                     <EyeIcon class="w-3 h-3" />
-                    <span>{{ getViewCount(photo.documentId) }}</span>
+                    <span>{{ photo.view_count }}</span>
                   </div>
                 </div>
               </div>
@@ -1251,10 +1437,10 @@ export function useServerSentEvents(url: string) {
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { useWebSocket } from '@/composables/useWebSocket'
-import { useServerSentEvents } from '@/composables/useServerSentEvents'
-import { useAuthStore } from '@/stores/auth'
-import type { Photo } from '@/types/gallery'
+import { useRealtimePhotos } from '@/composables/useRealtimePhotos'
+import { PhotoService } from '@/services/photoService'
+import { getImageUrl } from '@/lib/supabase'
+import type { Photo } from '@/types/database'
 
 interface Notification {
   id: string
@@ -1262,70 +1448,46 @@ interface Notification {
   type: 'info' | 'success' | 'warning' | 'error'
 }
 
-const authStore = useAuthStore()
-const photos = ref<Photo[]>([])
+const { photos, loading, loadPhotos } = useRealtimePhotos()
 const userLikes = ref<Set<string>>(new Set())
-const photoStats = reactive<Record<string, { likes: number; views: number }>>({})
 const notifications = ref<Notification[]>([])
 
-// WebSocket for bi-directional communication
-const { state: wsState, emit: wsEmit, on: wsOn } = useWebSocket(
-  undefined,
-  authStore.token
-)
-
-// SSE for live updates
-const { events: sseEvents, state: sseState } = useServerSentEvents(
-  `${import.meta.env.VITE_STRAPI_URL}/api/events/stream`
-)
-
-// Connection status
-const connectionStatus = computed(() => {
-  if (wsState.reconnecting) return 'Reconnecting...'
-  if (wsState.connected && sseState.connected) return 'Live'
-  if (wsState.connected || sseState.connected) return 'Partial'
-  return 'Offline'
-})
-
+// Connection status (simplified for Supabase)
+const connectionStatus = computed(() => 'Live')
 const connectionStatusClass = computed(() => ({
-  'bg-green-500 text-white': connectionStatus.value === 'Live',
-  'bg-yellow-500 text-white': connectionStatus.value === 'Partial',
-  'bg-red-500 text-white': connectionStatus.value === 'Offline',
-  'bg-blue-500 text-white': connectionStatus.value === 'Reconnecting...'
+  'bg-green-500 text-white': true
 }))
-
 const connectionDotClass = computed(() => ({
-  'bg-white animate-pulse': wsState.reconnecting,
-  'bg-white': !wsState.reconnecting
+  'bg-white': true
 }))
 
 // Photo interactions
-const toggleLike = (photoId: string) => {
-  wsEmit('photo:like', { photoId })
+const toggleLike = async (photoId: string) => {
+  try {
+    const result = await PhotoService.toggleLike(photoId)
+    if (result.liked) {
+      userLikes.value.add(photoId)
+    } else {
+      userLikes.value.delete(photoId)
+    }
+  } catch (error) {
+    addNotification('Failed to update like', 'error')
+  }
 }
 
 const isLiked = (photoId: string) => {
   return userLikes.value.has(photoId)
 }
 
-const getLikeCount = (photoId: string) => {
-  return photoStats[photoId]?.likes || 0
-}
-
-const getViewCount = (photoId: string) => {
-  return photoStats[photoId]?.views || 0
-}
-
-const openLightbox = (photo: Photo) => {
+const openLightbox = async (photo: Photo) => {
   // Track view
-  wsEmit('photo:view', { photoId: photo.documentId })
+  try {
+    await PhotoService.incrementViews(photo.id)
+  } catch (error) {
+    console.error('Failed to track view:', error)
+  }
   
   // Open lightbox logic here
-}
-
-const getPhotoUrl = (photo: Photo) => {
-  const baseUrl = import.meta.env.VITE_STRAPI_URL || 'http://localhost:1337'
-  return `${baseUrl}${photo.image.formats?.medium?.url || photo.image.url}`
 }
 
 const addNotification = (message: string, type: Notification['type'] = 'info') => {
@@ -1344,78 +1506,6 @@ const addNotification = (message: string, type: Notification['type'] = 'info') =
       notifications.value.splice(index, 1)
     }
   }, 5000)
-}
-
-// WebSocket event listeners
-onMounted(() => {
-  // Photo like events
-  wsOn('photo:liked', (data) => {
-    userLikes.value.add(data.photoId)
-    if (photoStats[data.photoId]) {
-      photoStats[data.photoId].likes = data.likeCount
-    }
-  })
-
-  wsOn('photo:unliked', (data) => {
-    userLikes.value.delete(data.photoId)
-    if (photoStats[data.photoId]) {
-      photoStats[data.photoId].likes = data.likeCount
-    }
-  })
-
-  wsOn('photo:like-update', (data) => {
-    if (photoStats[data.photoId]) {
-      photoStats[data.photoId].likes = data.likeCount
-    }
-  })
-
-  wsOn('photo:view-update', (data) => {
-    if (photoStats[data.photoId]) {
-      photoStats[data.photoId].views = data.viewCount
-    }
-  })
-
-  wsOn('gallery:new-photo', (data) => {
-    photos.value.unshift(data.photo)
-    addNotification('New photo added to gallery!', 'success')
-  })
-
-  wsOn('photo:updated', (data) => {
-    const index = photos.value.findIndex(p => p.documentId === data.photoId)
-    if (index > -1) {
-      photos.value[index] = { ...photos.value[index], ...data.data }
-    }
-  })
-
-  wsOn('photo:deleted', (data) => {
-    const index = photos.value.findIndex(p => p.documentId === data.photoId)
-    if (index > -1) {
-      photos.value.splice(index, 1)
-    }
-  })
-
-  wsOn('error', (error) => {
-    addNotification(error.message, 'error')
-  })
-})
-
-// Load initial data
-const loadPhotos = async () => {
-  try {
-    const response = await fetch(`${import.meta.env.VITE_STRAPI_URL}/api/photos?populate=*`)
-    const data = await response.json()
-    photos.value = data.data
-
-    // Initialize stats
-    data.data.forEach((photo: Photo) => {
-      photoStats[photo.documentId] = {
-        likes: photo.likeCount || 0,
-        views: photo.viewCount || 0
-      }
-    })
-  } catch (error) {
-    addNotification('Failed to load photos', 'error')
-  }
 }
 
 onMounted(() => {
@@ -1464,550 +1554,6 @@ onMounted(() => {
 </style>
 ```
 
-### TDD for Real-Time Features
-
-#### Testing WebSocket Composables
-
-```typescript
-// tests/composables/useWebSocket.test.ts
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { mount } from '@vue/test-utils'
-import { useWebSocket } from '@/composables/useWebSocket'
-
-// Mock Socket.IO
-const mockSocket = {
-  connect: vi.fn(),
-  disconnect: vi.fn(),
-  emit: vi.fn(),
-  on: vi.fn(),
-  off: vi.fn()
-}
-
-vi.mock('socket.io-client', () => ({
-  io: vi.fn(() => mockSocket)
-}))
-
-const TestComponent = {
-  template: '<div></div>',
-  setup() {
-    return useWebSocket('http://localhost:1337', 'mock-token')
-  }
-}
-
-describe('useWebSocket', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  describe('Connection Management', () => {
-    it('should initialize socket connection on mount', () => {
-      mount(TestComponent)
-      expect(mockSocket.connect).toHaveBeenCalled()
-    })
-
-    it('should handle connection events', () => {
-      const wrapper = mount(TestComponent)
-      const { state } = wrapper.vm
-
-      // Simulate connection
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )[1]
-      connectHandler()
-
-      expect(state.connected).toBe(true)
-      expect(state.error).toBe(null)
-    })
-
-    it('should handle connection errors', () => {
-      const wrapper = mount(TestComponent)
-      const { state } = wrapper.vm
-
-      // Simulate error
-      const errorHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect_error'
-      )[1]
-      errorHandler(new Error('Connection failed'))
-
-      expect(state.error).toBe('Connection failed')
-      expect(state.reconnectAttempts).toBe(1)
-    })
-
-    it('should disconnect on unmount', () => {
-      const wrapper = mount(TestComponent)
-      wrapper.unmount()
-      expect(mockSocket.disconnect).toHaveBeenCalled()
-    })
-  })
-
-  describe('Event Handling', () => {
-    it('should emit events when connected', () => {
-      const wrapper = mount(TestComponent)
-      const { emit, state } = wrapper.vm
-
-      // Simulate connection
-      state.connected = true
-      emit('test:event', { data: 'test' })
-
-      expect(mockSocket.emit).toHaveBeenCalledWith('test:event', { data: 'test' })
-    })
-
-    it('should not emit events when disconnected', () => {
-      const wrapper = mount(TestComponent)
-      const { emit, state } = wrapper.vm
-
-      state.connected = false
-      emit('test:event', { data: 'test' })
-
-      expect(mockSocket.emit).not.toHaveBeenCalled()
-    })
-
-    it('should register event listeners', () => {
-      const wrapper = mount(TestComponent)
-      const { on } = wrapper.vm
-      const callback = vi.fn()
-
-      on('test:event', callback)
-
-      expect(mockSocket.on).toHaveBeenCalledWith('test:event', callback)
-    })
-  })
-})
-```
-
-#### Testing Real-Time Photo Interactions
-
-```typescript
-// tests/components/RealTimeGallery.test.ts
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/vue'
-import userEvent from '@testing-library/user-event'
-import RealTimeGallery from '@/components/Gallery/RealTimeGallery.vue'
-import { createPinia } from 'pinia'
-
-// Mock WebSocket composable
-const mockWsEmit = vi.fn()
-const mockWsOn = vi.fn()
-
-vi.mock('@/composables/useWebSocket', () => ({
-  useWebSocket: () => ({
-    state: { connected: true, error: null, reconnecting: false },
-    emit: mockWsEmit,
-    on: mockWsOn
-  })
-}))
-
-// Mock SSE composable
-vi.mock('@/composables/useServerSentEvents', () => ({
-  useServerSentEvents: () => ({
-    events: [],
-    state: { connected: true, error: null }
-  })
-}))
-
-const mockPhotos = [
-  {
-    documentId: '1',
-    title: 'Test Photo',
-    category: 'landscape',
-    image: {
-      url: '/test.jpg',
-      alternativeText: 'Test photo',
-      formats: {
-        medium: { url: '/test-medium.jpg' }
-      }
-    }
-  }
-]
-
-describe('RealTimeGallery', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    // Mock fetch for initial photo loading
-    global.fetch = vi.fn(() =>
-      Promise.resolve({
-        json: () => Promise.resolve({ data: mockPhotos })
-      })
-    ) as any
-  })
-
-  it('should display connection status', async () => {
-    render(RealTimeGallery, {
-      global: { plugins: [createPinia()] }
-    })
-
-    expect(screen.getByText('Live')).toBeInTheDocument()
-  })
-
-  it('should emit like event when heart button is clicked', async () => {
-    const user = userEvent.setup()
-    render(RealTimeGallery, {
-      global: { plugins: [createPinia()] }
-    })
-
-    await screen.findByText('Test Photo')
-    
-    const likeButton = screen.getByRole('button', { name: /heart/i })
-    await user.click(likeButton)
-
-    expect(mockWsEmit).toHaveBeenCalledWith('photo:like', { photoId: '1' })
-  })
-
-  it('should emit view event when photo is clicked', async () => {
-    const user = userEvent.setup()
-    render(RealTimeGallery, {
-      global: { plugins: [createPinia()] }
-    })
-
-    await screen.findByText('Test Photo')
-    
-    const photoCard = screen.getByRole('img')
-    await user.click(photoCard.parentElement!)
-
-    expect(mockWsEmit).toHaveBeenCalledWith('photo:view', { photoId: '1' })
-  })
-
-  it('should register WebSocket event listeners', () => {
-    render(RealTimeGallery, {
-      global: { plugins: [createPinia()] }
-    })
-
-    // Check that event listeners were registered
-    expect(mockWsOn).toHaveBeenCalledWith('photo:liked', expect.any(Function))
-    expect(mockWsOn).toHaveBeenCalledWith('photo:unliked', expect.any(Function))
-    expect(mockWsOn).toHaveBeenCalledWith('gallery:new-photo', expect.any(Function))
-  })
-
-  it('should handle real-time like updates', async () => {
-    render(RealTimeGallery, {
-      global: { plugins: [createPinia()] }
-    })
-
-    // Simulate receiving a like update
-    const likeHandler = mockWsOn.mock.calls.find(
-      call => call[0] === 'photo:like-update'
-    )?.[1]
-
-    if (likeHandler) {
-      likeHandler({ photoId: '1', likeCount: 5 })
-    }
-
-    await screen.findByText('5') // Like count should update
-  })
-})
-```
-
-### Performance Optimization for Real-Time Features
-
-#### Connection Pooling and Throttling
-
-```typescript
-// src/utils/realTimeOptimization.ts
-export class ConnectionManager {
-  private static instance: ConnectionManager
-  private connections = new Map<string, any>()
-  private eventQueue = new Map<string, any[]>()
-  private throttleTimers = new Map<string, number>()
-
-  static getInstance(): ConnectionManager {
-    if (!ConnectionManager.instance) {
-      ConnectionManager.instance = new ConnectionManager()
-    }
-    return ConnectionManager.instance
-  }
-
-  // Throttle events to prevent spam
-  throttleEvent(eventName: string, data: any, delay = 100) {
-    const key = `${eventName}-${JSON.stringify(data)}`
-    
-    if (this.throttleTimers.has(key)) {
-      clearTimeout(this.throttleTimers.get(key)!)
-    }
-
-    const timer = setTimeout(() => {
-      this.emitEvent(eventName, data)
-      this.throttleTimers.delete(key)
-    }, delay)
-
-    this.throttleTimers.set(key, timer)
-  }
-
-  // Batch events for efficiency
-  batchEvents(events: Array<{ name: string; data: any }>) {
-    const batched = new Map<string, any[]>()
-    
-    events.forEach(({ name, data }) => {
-      if (!batched.has(name)) {
-        batched.set(name, [])
-      }
-      batched.get(name)!.push(data)
-    })
-
-    batched.forEach((dataArray, eventName) => {
-      this.emitEvent(`${eventName}:batch`, dataArray)
-    })
-  }
-
-  private emitEvent(eventName: string, data: any) {
-    // Implementation depends on your WebSocket setup
-    console.log('Emitting event:', eventName, data)
-  }
-}
-```
-
-#### Optimized Real-Time Store
-
-```typescript
-// src/stores/realTime.ts
-import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
-import { ConnectionManager } from '@/utils/realTimeOptimization'
-
-export const useRealTimeStore = defineStore('realTime', () => {
-  const connectionManager = ConnectionManager.getInstance()
-  
-  // Real-time data
-  const photoStats = ref<Record<string, { likes: number; views: number }>>({})
-  const onlineUsers = ref<string[]>([])
-  const recentActivity = ref<Array<{ type: string; data: any; timestamp: Date }>>([])
-
-  // Computed properties
-  const totalLikes = computed(() => {
-    return Object.values(photoStats.value).reduce((total, stats) => total + stats.likes, 0)
-  })
-
-  const totalViews = computed(() => {
-    return Object.values(photoStats.value).reduce((total, stats) => total + stats.views, 0)
-  })
-
-  // Actions
-  const updatePhotoStats = (photoId: string, updates: Partial<{ likes: number; views: number }>) => {
-    if (!photoStats.value[photoId]) {
-      photoStats.value[photoId] = { likes: 0, views: 0 }
-    }
-    Object.assign(photoStats.value[photoId], updates)
-  }
-
-  const addActivity = (type: string, data: any) => {
-    recentActivity.value.unshift({
-      type,
-      data,
-      timestamp: new Date()
-    })
-
-    // Keep only last 50 activities
-    if (recentActivity.value.length > 50) {
-      recentActivity.value = recentActivity.value.slice(0, 50)
-    }
-  }
-
-  const throttledLike = (photoId: string) => {
-    connectionManager.throttleEvent('photo:like', { photoId }, 500)
-  }
-
-  return {
-    photoStats,
-    onlineUsers,
-    recentActivity,
-    totalLikes,
-    totalViews,
-    updatePhotoStats,
-    addActivity,
-    throttledLike
-  }
-})
-```
-
-## Deployment Configuration
-
-### Multi-Environment Setup
-
-```yaml
-# docker-compose.yml
-version: '3.8'
-
-services:
-  strapi:
-    image: node:20-alpine
-    working_dir: /app
-    volumes:
-      - ./backend:/app
-    ports:
-      - "1337:1337"
-    environment:
-      - NODE_ENV=production
-      - DATABASE_URL=postgresql://user:pass@db:5432/portfolio
-    command: npm start
-    depends_on:
-      - db
-      - redis
-
-  frontend:
-    image: node:20-alpine
-    working_dir: /app
-    volumes:
-      - ./frontend:/app
-    ports:
-      - "3000:3000"
-    environment:
-      - VITE_STRAPI_URL=http://strapi:1337
-    command: npm run preview
-
-  db:
-    image: postgres:16-alpine
-    environment:
-      - POSTGRES_DB=portfolio
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=pass
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-
-volumes:
-  postgres_data:
-```
-
-### CI/CD Pipeline
-
-```yaml
-# .github/workflows/deploy.yml
-name: Deploy Portfolio
-
-on:
-  push:
-    branches: [main]
-
-jobs:
-  test-and-build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      
-      - name: Install dependencies
-        run: |
-          cd frontend && npm ci
-          cd ../backend && npm ci
-      
-      - name: Run tests
-        run: |
-          cd frontend && npm run test
-          cd ../backend && npm run test
-      
-      - name: TypeScript check
-        run: cd frontend && npm run type-check
-      
-      - name: Build frontend
-        run: cd frontend && npm run build
-      
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-dist
-          path: frontend/dist/
-
-  deploy:
-    needs: test-and-build
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - name: Deploy to Strapi Cloud
-        run: |
-          cd backend
-          npx strapi deploy
-        env:
-          STRAPI_TOKEN: ${{ secrets.STRAPI_TOKEN }}
-      
-      - name: Deploy to Vercel
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.ORG_ID }}
-          vercel-project-id: ${{ secrets.PROJECT_ID }}
-          vercel-args: '--prod'
-```
-
-## Security and Performance Best Practices
-
-### Environment Configuration
-
-```bash
-# .env.production
-NODE_ENV=production
-VITE_STRAPI_URL=https://your-strapi-api.com
-VITE_CDN_URL=https://your-cdn.com
-
-# Strapi backend .env
-DATABASE_URL=postgresql://user:pass@host:port/db
-APP_KEYS=key1,key2,key3,key4
-ADMIN_JWT_SECRET=your-admin-secret
-API_TOKEN_SALT=your-api-token-salt
-TRANSFER_TOKEN_SALT=your-transfer-token-salt
-
-# Third-party services
-CLOUDINARY_CLOUD_NAME=your-cloud-name
-CLOUDINARY_API_KEY=your-api-key
-CLOUDINARY_API_SECRET=your-api-secret
-```
-
-### Performance Monitoring
-
-```typescript
-// composables/usePerformanceMonitoring.ts
-import { onMounted } from 'vue'
-
-export function usePerformanceMonitoring() {
-  const trackCoreWebVitals = () => {
-    // Track Largest Contentful Paint
-    new PerformanceObserver((list) => {
-      const entries = list.getEntries()
-      const lastEntry = entries[entries.length - 1]
-      
-      // Send to analytics
-      sendMetric('LCP', lastEntry.startTime)
-    }).observe({ entryTypes: ['largest-contentful-paint'] })
-    
-    // Track First Input Delay
-    new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) {
-        sendMetric('FID', entry.processingStart - entry.startTime)
-      }
-    }).observe({ entryTypes: ['first-input'] })
-    
-    // Track Cumulative Layout Shift
-    let clsValue = 0
-    new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) {
-        if (!entry.hadRecentInput) {
-          clsValue += entry.value
-        }
-      }
-      sendMetric('CLS', clsValue)
-    }).observe({ entryTypes: ['layout-shift'] })
-  }
-  
-  const sendMetric = (name: string, value: number) => {
-    // Send to your analytics service
-    console.log(`${name}: ${value}`)
-  }
-  
-  onMounted(() => {
-    trackCoreWebVitals()
-  })
-}
-```
-
-This comprehensive implementation guide provides everything needed to build a modern, high-performance photography portfolio using the latest versions of Vue 3, Tailwind CSS v4, and Strapi v5. The setup emphasizes developer experience, performance optimization, and production readiness with modern deployment strategies and monitoring capabilities.
-
 ## Test-Driven Development (TDD) with Vitest
 
 ### Why TDD for Photography Portfolio?
@@ -2034,9 +1580,9 @@ graph LR
 
 ```bash
 # Install Vitest and testing utilities
-npm install -D vitest @vue/test-utils jsdom @vitest/ui
-npm install -D @testing-library/vue @testing-library/jest-dom
-npm install -D @testing-library/user-event happy-dom
+pnpm install -D vitest @vue/test-utils jsdom @vitest/ui
+pnpm install -D @testing-library/vue @testing-library/jest-dom
+pnpm install -D @testing-library/user-event happy-dom
 ```
 
 #### Updated package.json with TDD scripts
@@ -2169,803 +1715,296 @@ Object.defineProperty(window, 'matchMedia', {
 })
 ```
 
-### TDD Example: Photo Card Component
+### Testing Supabase Integration
 
-Let's build a `PhotoCard` component using TDD principles:
-
-#### Step 1: Define Requirements
+#### Mock Supabase Client
 
 ```typescript
-// tests/PhotoCard.requirements.md
-/**
- * PhotoCard Component Requirements:
- * 
- * 1. Display photo with title, description, and metadata
- * 2. Show loading state while image loads
- * 3. Handle like/unlike functionality
- * 4. Support lazy loading for performance
- * 5. Emit click events for lightbox
- * 6. Handle image load errors gracefully
- * 7. Display hover overlay with actions
- */
-```
+// tests/__mocks__/supabase.ts
+import { vi } from 'vitest'
 
-#### Step 2: RED - Write Failing Tests
-
-```typescript
-// tests/components/PhotoCard.test.ts
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/vue'
-import userEvent from '@testing-library/user-event'
-import PhotoCard from '@/components/Gallery/PhotoCard.vue'
-import type { Photo } from '@/types/gallery'
-
-const mockPhoto: Photo = {
-  documentId: '1',
-  title: 'Mountain Sunset',
-  description: 'Beautiful mountain landscape at sunset',
-  image: {
-    url: '/uploads/mountain.jpg',
-    alternativeText: 'Mountain sunset landscape',
-    formats: {
-      thumbnail: { url: '/uploads/thumb_mountain.jpg', width: 400, height: 300 }
-    }
+const mockSupabase = {
+  from: vi.fn(() => ({
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    not: vi.fn().mockReturnThis(),
+    order: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
+    single: vi.fn(),
+    then: vi.fn()
+  })),
+  rpc: vi.fn(),
+  storage: {
+    from: vi.fn(() => ({
+      getPublicUrl: vi.fn(() => ({ data: { publicUrl: 'http://test.com/image.jpg' } })),
+      upload: vi.fn()
+    }))
   },
-  category: 'landscape',
-  featured: true,
-  createdAt: '2024-01-01',
-  updatedAt: '2024-01-01'
+  channel: vi.fn(() => ({
+    on: vi.fn().mockReturnThis(),
+    subscribe: vi.fn()
+  })),
+  removeChannel: vi.fn()
 }
 
-describe('PhotoCard', () => {
-  describe('Basic Rendering', () => {
-    it('should render photo with correct title and alt text', () => {
-      render(PhotoCard, {
-        props: { photo: mockPhoto, isLiked: false }
-      })
-      
-      expect(screen.getByRole('img')).toHaveAttribute('alt', mockPhoto.image.alternativeText)
-      expect(screen.getByText(mockPhoto.title)).toBeInTheDocument()
-    })
-
-    it('should display loading state initially', () => {
-      render(PhotoCard, {
-        props: { photo: mockPhoto, isLiked: false }
-      })
-      
-      expect(screen.getByTestId('photo-skeleton')).toBeInTheDocument()
-    })
-
-    it('should show description on hover', async () => {
-      const user = userEvent.setup()
-      render(PhotoCard, {
-        props: { photo: mockPhoto, isLiked: false }
-      })
-      
-      const card = screen.getByTestId('photo-card')
-      await user.hover(card)
-      
-      expect(screen.getByText(mockPhoto.description)).toBeInTheDocument()
-    })
-  })
-
-  describe('Like Functionality', () => {
-    it('should emit like event when heart button is clicked', async () => {
-      const user = userEvent.setup()
-      const { emitted } = render(PhotoCard, {
-        props: { photo: mockPhoto, isLiked: false }
-      })
-      
-      const likeButton = screen.getByRole('button', { name: /like photo/i })
-      await user.click(likeButton)
-      
-      expect(emitted()).toHaveProperty('like')
-    })
-
-    it('should show filled heart when photo is liked', () => {
-      render(PhotoCard, {
-        props: { photo: mockPhoto, isLiked: true }
-      })
-      
-      const likeButton = screen.getByRole('button', { name: /unlike photo/i })
-      expect(likeButton).toHaveClass('text-red-500')
-    })
-  })
-
-  describe('Image Loading', () => {
-    it('should handle image load success', async () => {
-      render(PhotoCard, {
-        props: { photo: mockPhoto, isLiked: false }
-      })
-      
-      const image = screen.getByRole('img')
-      await fireEvent.load(image)
-      
-      expect(screen.queryByTestId('photo-skeleton')).not.toBeInTheDocument()
-      expect(image).toHaveClass('opacity-100')
-    })
-
-    it('should handle image load error', async () => {
-      render(PhotoCard, {
-        props: { photo: mockPhoto, isLiked: false }
-      })
-      
-      const image = screen.getByRole('img')
-      await fireEvent.error(image)
-      
-      expect(screen.getByText('Failed to load image')).toBeInTheDocument()
-    })
-  })
-
-  describe('Click Events', () => {
-    it('should emit click event when card is clicked', async () => {
-      const user = userEvent.setup()
-      const { emitted } = render(PhotoCard, {
-        props: { photo: mockPhoto, isLiked: false }
-      })
-      
-      const card = screen.getByTestId('photo-card')
-      await user.click(card)
-      
-      expect(emitted()).toHaveProperty('click')
-    })
-
-    it('should not emit click when like button is clicked', async () => {
-      const user = userEvent.setup()
-      const { emitted } = render(PhotoCard, {
-        props: { photo: mockPhoto, isLiked: false }
-      })
-      
-      const likeButton = screen.getByRole('button', { name: /like photo/i })
-      await user.click(likeButton)
-      
-      expect(emitted()).not.toHaveProperty('click')
-      expect(emitted()).toHaveProperty('like')
-    })
-  })
-})
+export { mockSupabase as supabase }
 ```
 
-#### Step 3: GREEN - Make Tests Pass
-
-```vue
-<!-- src/components/Gallery/PhotoCard.vue -->
-<template>
-  <div 
-    data-testid="photo-card"
-    class="photo-card group relative cursor-pointer overflow-hidden rounded-lg bg-gray-100 transition-all duration-300 hover:scale-105 hover:shadow-xl"
-    @click="handleCardClick"
-  >
-    <!-- Loading skeleton -->
-    <div 
-      v-if="!imageLoaded && !imageError"
-      data-testid="photo-skeleton"
-      class="absolute inset-0 bg-gray-200 animate-pulse"
-      :style="{ aspectRatio: `${photo.image.width || 16}/${photo.image.height || 9}` }"
-    >
-      <div class="absolute inset-0 flex items-center justify-center">
-        <div class="w-8 h-8 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    </div>
-    
-    <!-- Main image -->
-    <picture v-if="!imageError">
-      <source :srcset="generateSrcSet('avif')" type="image/avif" />
-      <source :srcset="generateSrcSet('webp')" type="image/webp" />
-      <img
-        :src="imageSource"
-        :alt="photo.image.alternativeText || photo.title"
-        :loading="lazy ? 'lazy' : 'eager'"
-        class="w-full h-auto transition-opacity duration-300"
-        :class="{ 'opacity-100': imageLoaded, 'opacity-0': !imageLoaded }"
-        @load="handleImageLoad"
-        @error="handleImageError"
-        :style="{ aspectRatio: `${photo.image.width || 16}/${photo.image.height || 9}` }"
-      />
-    </picture>
-    
-    <!-- Error state -->
-    <div v-if="imageError" class="flex items-center justify-center h-48 bg-gray-200">
-      <span class="text-gray-500">Failed to load image</span>
-    </div>
-    
-    <!-- Hover overlay -->
-    <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-300">
-      <!-- Like button -->
-      <div class="absolute top-3 right-3 z-10">
-        <button
-          :aria-label="isLiked ? 'Unlike photo' : 'Like photo'"
-          class="p-2 rounded-full bg-white bg-opacity-80 backdrop-blur-sm transition-all duration-200 hover:bg-opacity-100"
-          :class="[
-            isLiked 
-              ? 'text-red-500 hover:text-red-600' 
-              : 'text-gray-600 hover:text-red-400'
-          ]"
-          @click.stop="handleLikeClick"
-        >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            :fill="isLiked ? 'currentColor' : 'none'"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-          </svg>
-        </button>
-      </div>
-      
-      <!-- Info overlay -->
-      <div class="absolute bottom-0 left-0 right-0 p-4 text-white transform translate-y-full group-hover:translate-y-0 transition-transform duration-300">
-        <h3 class="font-semibold text-sm truncate mb-1">
-          {{ photo.title }}
-        </h3>
-        <p v-if="photo.description" class="text-xs opacity-80 mb-1">
-          {{ photo.description }}
-        </p>
-        <div v-if="photo.category" class="text-xs opacity-80">
-          {{ photo.category }}
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
-<script setup lang="ts">
-import { ref, computed } from 'vue'
-import type { Photo } from '@/types/gallery'
-
-interface Props {
-  photo: Photo
-  isLiked: boolean
-  lazy?: boolean
-}
-
-interface Emits {
-  (e: 'click'): void
-  (e: 'like'): void
-}
-
-const props = withDefaults(defineProps<Props>(), {
-  lazy: true
-})
-
-const emit = defineEmits<Emits>()
-
-const imageLoaded = ref(false)
-const imageError = ref(false)
-const STRAPI_URL = import.meta.env.VITE_STRAPI_URL || 'http://localhost:1337'
-
-const imageSource = computed(() => {
-  if (props.photo.image.formats?.thumbnail) {
-    return `${STRAPI_URL}${props.photo.image.formats.thumbnail.url}`
-  }
-  return `${STRAPI_URL}${props.photo.image.url}`
-})
-
-const generateSrcSet = (format: 'avif' | 'webp') => {
-  const baseUrl = props.photo.image.url.replace(/\.[^/.]+$/, '')
-  return `${STRAPI_URL}${baseUrl}.${format}`
-}
-
-const handleImageLoad = () => {
-  imageLoaded.value = true
-}
-
-const handleImageError = () => {
-  imageError.value = true
-}
-
-const handleCardClick = () => {
-  emit('click')
-}
-
-const handleLikeClick = () => {
-  emit('like')
-}
-</script>
-```
-
-#### Step 4: REFACTOR - Improve Implementation
-
-```vue
-<!-- Refactored PhotoCard.vue with better performance and accessibility -->
-<template>
-  <article 
-    data-testid="photo-card"
-    class="photo-card group relative cursor-pointer overflow-hidden rounded-lg bg-gray-100 transition-all duration-300 hover:scale-105 hover:shadow-xl focus-within:ring-2 focus-within:ring-blue-500"
-    @click="handleCardClick"
-    @keydown.enter="handleCardClick"
-    @keydown.space.prevent="handleCardClick"
-    tabindex="0"
-    :aria-label="`View ${photo.title} in lightbox`"
-  >
-    <!-- Loading skeleton with better aspect ratio handling -->
-    <PhotoSkeleton 
-      v-if="!imageLoaded && !imageError"
-      :width="photo.image.width"
-      :height="photo.image.height"
-    />
-    
-    <!-- Optimized image with responsive loading -->
-    <ResponsiveImage
-      v-if="!imageError"
-      :photo="photo"
-      :lazy="lazy"
-      @load="handleImageLoad"
-      @error="handleImageError"
-      :class="{ 'opacity-100': imageLoaded, 'opacity-0': !imageLoaded }"
-    />
-    
-    <!-- Error state with retry option -->
-    <ImageError v-if="imageError" @retry="retryImageLoad" />
-    
-    <!-- Interactive overlay -->
-    <PhotoOverlay
-      :photo="photo"
-      :is-liked="isLiked"
-      @like="handleLikeClick"
-    />
-  </article>
-</template>
-
-<script setup lang="ts">
-import { ref } from 'vue'
-import PhotoSkeleton from './PhotoSkeleton.vue'
-import ResponsiveImage from './ResponsiveImage.vue'
-import ImageError from './ImageError.vue'
-import PhotoOverlay from './PhotoOverlay.vue'
-import type { Photo } from '@/types/gallery'
-
-interface Props {
-  photo: Photo
-  isLiked: boolean
-  lazy?: boolean
-}
-
-interface Emits {
-  (e: 'click'): void
-  (e: 'like'): void
-}
-
-const props = withDefaults(defineProps<Props>(), {
-  lazy: true
-})
-
-const emit = defineEmits<Emits>()
-
-const imageLoaded = ref(false)
-const imageError = ref(false)
-
-const handleImageLoad = () => {
-  imageLoaded.value = true
-}
-
-const handleImageError = () => {
-  imageError.value = true
-}
-
-const retryImageLoad = () => {
-  imageError.value = false
-  imageLoaded.value = false
-}
-
-const handleCardClick = () => {
-  emit('click')
-}
-
-const handleLikeClick = () => {
-  emit('like')
-}
-</script>
-```
-
-### TDD for Composables
-
-#### Testing usePhotos Composable
+#### Testing Photo Service
 
 ```typescript
-// tests/composables/usePhotos.test.ts
+// tests/services/photoService.test.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
-import { usePhotos } from '@/composables/usePhotos'
+import { PhotoService } from '@/services/photoService'
 
-// Mock fetch globally
-global.fetch = vi.fn()
-
-const mockPhotosResponse = {
-  data: [
-    {
-      documentId: '1',
-      title: 'Test Photo',
-      image: { url: '/test.jpg', alternativeText: 'Test' },
-      category: 'landscape',
-      featured: true
-    }
-  ]
-}
-
-// Test component wrapper for composable testing
-const TestComponent = {
-  template: '<div></div>',
-  setup() {
-    return usePhotos()
+// Mock Supabase
+vi.mock('@/lib/supabase', () => ({
+  supabase: {
+    from: vi.fn(() => ({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      not: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockReturnThis(),
+      then: vi.fn().mockResolvedValue({
+        data: [
+          {
+            id: '1',
+            title: 'Test Photo',
+            image_url: '/test.jpg',
+            category: 'landscape',
+            featured: true
+          }
+        ],
+        error: null
+      })
+    })),
+    rpc: vi.fn()
   }
-}
+}))
 
-describe('usePhotos', () => {
+describe('PhotoService', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  describe('Initial State', () => {
-    it('should initialize with empty photos array', () => {
-      const wrapper = mount(TestComponent)
-      const { photos, loading, error } = wrapper.vm
-      
-      expect(photos).toEqual([])
-      expect(loading).toBe(false)
-      expect(error).toBe(null)
-    })
-  })
-
-  describe('fetchPhotos', () => {
-    it('should set loading state during fetch', async () => {
-      fetch.mockImplementationOnce(() => 
-        new Promise(resolve => setTimeout(() => resolve({
-          ok: true,
-          json: () => Promise.resolve(mockPhotosResponse)
-        }), 100))
-      )
-
-      const wrapper = mount(TestComponent)
-      const { fetchPhotos, loading } = wrapper.vm
-      
-      const fetchPromise = fetchPhotos()
-      expect(loading).toBe(true)
-      
-      await fetchPromise
-      expect(loading).toBe(false)
-    })
-
-    it('should update photos on successful fetch', async () => {
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockPhotosResponse)
+  describe('getPhotos', () => {
+    it('should fetch photos with filters', async () => {
+      const photos = await PhotoService.getPhotos({
+        category: 'landscape',
+        featured: true,
+        limit: 10
       })
 
-      const wrapper = mount(TestComponent)
-      const { fetchPhotos, photos } = wrapper.vm
-      
-      await fetchPhotos()
-      
-      expect(photos).toEqual(mockPhotosResponse.data)
+      expect(photos).toHaveLength(1)
+      expect(photos[0].title).toBe('Test Photo')
     })
 
-    it('should handle fetch errors', async () => {
-      fetch.mockRejectedValueOnce(new Error('Network error'))
-
-      const wrapper = mount(TestComponent)
-      const { fetchPhotos, error, photos } = wrapper.vm
-      
-      await fetchPhotos()
-      
-      expect(error).toBe('Failed to fetch photos')
-      expect(photos).toEqual([])
-    })
-  })
-
-  describe('Computed Properties', () => {
-    it('should filter featured photos correctly', async () => {
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          data: [
-            { ...mockPhotosResponse.data[0], featured: true },
-            { ...mockPhotosResponse.data[0], documentId: '2', featured: false }
-          ]
+    it('should handle API errors', async () => {
+      // Mock error response
+      vi.mocked(supabase.from).mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        not: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        then: vi.fn().mockResolvedValue({
+          data: null,
+          error: { message: 'Database error' }
         })
       })
 
-      const wrapper = mount(TestComponent)
-      const { fetchPhotos, featuredPhotos } = wrapper.vm
+      await expect(PhotoService.getPhotos()).rejects.toThrow('Database error')
+    })
+  })
+
+  describe('toggleLike', () => {
+    it('should toggle photo like', async () => {
+      vi.mocked(supabase.rpc).mockResolvedValue({
+        data: { liked: true, like_count: 5 },
+        error: null
+      })
+
+      const result = await PhotoService.toggleLike('photo-id')
       
-      await fetchPhotos()
-      
-      expect(featuredPhotos).toHaveLength(1)
-      expect(featuredPhotos[0].featured).toBe(true)
+      expect(result.liked).toBe(true)
+      expect(result.like_count).toBe(5)
+      expect(supabase.rpc).toHaveBeenCalledWith('toggle_photo_like', {
+        photo_uuid: 'photo-id',
+        client_ip: '192.168.1.1'
+      })
     })
   })
 })
 ```
 
-### Integration Testing
+## Image Storage & Processing with Supabase
 
-#### Testing Gallery with Photo Cards
+### Storage Bucket Setup
+
+```sql
+-- Create storage bucket for photos
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('photos', 'photos', true);
+
+-- Create policy for photo uploads
+CREATE POLICY "Anyone can view photos" 
+  ON storage.objects FOR SELECT 
+  USING (bucket_id = 'photos');
+
+CREATE POLICY "Authenticated users can upload photos" 
+  ON storage.objects FOR INSERT 
+  WITH CHECK (
+    bucket_id = 'photos' 
+    AND auth.role() = 'authenticated'
+  );
+```
+
+### Image Processing Edge Function
 
 ```typescript
-// tests/integration/Gallery.test.ts
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/vue'
-import userEvent from '@testing-library/user-event'
-import Gallery from '@/components/Gallery/Gallery.vue'
-import { createPinia } from 'pinia'
+// supabase/functions/process-image/index.ts
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-// Mock the Strapi service
-vi.mock('@/services/strapi', () => ({
-  strapiService: {
-    getPortfolio: vi.fn(() => Promise.resolve([
-      {
-        documentId: '1',
-        title: 'Mountain View',
-        image: { url: '/mountain.jpg', alternativeText: 'Mountain' },
-        category: 'landscape',
-        featured: true
-      },
-      {
-        documentId: '2', 
-        title: 'City Lights',
-        image: { url: '/city.jpg', alternativeText: 'City' },
-        category: 'urban',
-        featured: false
-      }
-    ]))
-  }
-}))
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
 
-describe('Gallery Integration', () => {
-  const renderGallery = () => {
-    return render(Gallery, {
-      global: {
-        plugins: [createPinia()]
-      }
-    })
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
   }
 
-  it('should load and display photos from API', async () => {
-    renderGallery()
+  try {
+    const { imageUrl, photoId } = await req.json()
     
-    await waitFor(() => {
-      expect(screen.getByText('Mountain View')).toBeInTheDocument()
-      expect(screen.getByText('City Lights')).toBeInTheDocument()
-    })
-  })
-
-  it('should filter photos by category', async () => {
-    const user = userEvent.setup()
-    renderGallery()
+    // Process image (resize, generate thumbnails, extract metadata)
+    const processedImage = await processImage(imageUrl)
     
-    await waitFor(() => {
-      expect(screen.getByText('Mountain View')).toBeInTheDocument()
-    })
-    
-    const landscapeFilter = screen.getByRole('button', { name: /landscape/i })
-    await user.click(landscapeFilter)
-    
-    expect(screen.getByText('Mountain View')).toBeInTheDocument()
-    expect(screen.queryByText('City Lights')).not.toBeInTheDocument()
-  })
+    // Update photo record with processed data
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
 
-  it('should open lightbox when photo is clicked', async () => {
-    const user = userEvent.setup()
-    renderGallery()
-    
-    await waitFor(() => {
-      expect(screen.getByText('Mountain View')).toBeInTheDocument()
-    })
-    
-    const photoCard = screen.getByTestId('photo-card')
-    await user.click(photoCard)
-    
-    expect(screen.getByRole('dialog')).toBeInTheDocument()
-    expect(screen.getByRole('img', { name: /mountain/i })).toBeInTheDocument()
-  })
-})
-```
+    const { error } = await supabase
+      .from('photos')
+      .update({
+        image_metadata: processedImage.metadata,
+        thumbnail_url: processedImage.thumbnailUrl
+      })
+      .eq('id', photoId)
 
-### Performance Testing
+    if (error) throw error
 
-```typescript
-// tests/performance/ImageLoading.test.ts
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/vue'
-import PhotoCard from '@/components/Gallery/PhotoCard.vue'
-
-describe('Image Loading Performance', () => {
-  it('should implement lazy loading for off-screen images', async () => {
-    const intersectionObserverMock = vi.fn()
-    const mockObserve = vi.fn()
-    const mockUnobserve = vi.fn()
-
-    global.IntersectionObserver = vi.fn().mockImplementation(() => ({
-      observe: mockObserve,
-      unobserve: mockUnobserve,
-      disconnect: vi.fn()
-    }))
-
-    render(PhotoCard, {
-      props: {
-        photo: {
-          documentId: '1',
-          title: 'Test',
-          image: { url: '/test.jpg', alternativeText: 'Test' }
-        },
-        isLiked: false,
-        lazy: true
+    return new Response(
+      JSON.stringify({ success: true, data: processedImage }),
+      { 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        } 
       }
-    })
-
-    expect(mockObserve).toHaveBeenCalled()
-  })
-
-  it('should preload critical images', () => {
-    render(PhotoCard, {
-      props: {
-        photo: {
-          documentId: '1',
-          title: 'Hero Image',
-          image: { url: '/hero.jpg', alternativeText: 'Hero' }
-        },
-        isLiked: false,
-        lazy: false // Critical image
+    )
+  } catch (error) {
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { 
+        status: 400,
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        } 
       }
-    })
-
-    const image = screen.getByRole('img')
-    expect(image).toHaveAttribute('loading', 'eager')
-  })
+    )
+  }
 })
+
+async function processImage(imageUrl: string) {
+  // Implementation for image processing
+  // Could use Deno's WebAssembly or external service
+  return {
+    metadata: {
+      width: 1920,
+      height: 1080,
+      format: 'jpeg',
+      size: 245760
+    },
+    thumbnailUrl: imageUrl.replace('.jpg', '_thumb.jpg')
+  }
+}
 ```
 
-### E2E Testing with Cypress (Optional)
+## Deployment Configuration
 
-```typescript
-// cypress/e2e/portfolio.cy.ts
-describe('Photography Portfolio E2E', () => {
-  beforeEach(() => {
-    cy.visit('/')
-  })
-
-  it('should display portfolio gallery', () => {
-    cy.get('[data-testid="photo-card"]').should('be.visible')
-    cy.get('[data-testid="photo-card"]').should('have.length.greaterThan', 0)
-  })
-
-  it('should filter photos by category', () => {
-    cy.get('[data-testid="filter-landscape"]').click()
-    cy.get('[data-testid="photo-card"]').each($card => {
-      cy.wrap($card).should('contain.attr', 'data-category', 'landscape')
-    })
-  })
-
-  it('should open lightbox on photo click', () => {
-    cy.get('[data-testid="photo-card"]').first().click()
-    cy.get('[data-testid="lightbox"]').should('be.visible')
-    cy.get('[data-testid="lightbox-close"]').click()
-    cy.get('[data-testid="lightbox"]').should('not.exist')
-  })
-
-  it('should like/unlike photos', () => {
-    cy.get('[data-testid="like-button"]').first().click()
-    cy.get('[data-testid="like-button"]').first().should('have.class', 'text-red-500')
-    
-    cy.get('[data-testid="like-button"]').first().click()
-    cy.get('[data-testid="like-button"]').first().should('not.have.class', 'text-red-500')
-  })
-})
-```
-
-### TDD Development Workflow
-
-#### Daily TDD Workflow for Photography Portfolio
+### Environment Variables
 
 ```bash
-# 1. Start TDD session
-npm run tdd
-
-# 2. Create feature branch
-git checkout -b feature/photo-filter-component
-
-# 3. Write failing test first
-# tests/components/PhotoFilter.test.ts
-
-# 4. Watch test fail (RED)
-# 5. Write minimal code to pass (GREEN) 
-# 6. Refactor code (REFACTOR)
-# 7. Commit when tests pass
-
-git add .
-git commit -m "feat: add photo filter component with TDD"
-
-# 8. Repeat cycle for next feature
+# .env.local
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+VITE_SUPABASE_SERVICE_ROLE_KEY=your-service-role-key # For admin operations
 ```
 
-#### Test Organization Structure
-
-```
-tests/
-├── setup.ts                     # Global test configuration
-├── components/                  # Component unit tests
-│   ├── Gallery/
-│   │   ├── PhotoCard.test.ts
-│   │   ├── Gallery.test.ts
-│   │   ├── Lightbox.test.ts
-│   │   └── FilterBar.test.ts
-│   └── Layout/
-│       ├── Header.test.ts
-│       └── Navigation.test.ts
-├── composables/                 # Composable unit tests
-│   ├── usePhotos.test.ts
-│   ├── useLikes.test.ts
-│   └── useAnimation.test.ts
-├── stores/                      # Store unit tests
-│   ├── gallery.test.ts
-│   └── likes.test.ts
-├── integration/                 # Integration tests
-│   ├── Gallery.test.ts
-│   └── Portfolio.test.ts
-├── e2e/                        # End-to-end tests
-│   └── portfolio.cy.ts
-└── __mocks__/                  # Test mocks
-    ├── strapi.ts
-    └── intersectionObserver.ts
-```
-
-### Visual Regression Testing
-
-```typescript
-// tests/visual/PhotoCard.test.ts
-import { describe, it } from 'vitest'
-import { render } from '@testing-library/vue'
-import { toMatchImageSnapshot } from 'jest-image-snapshot'
-import PhotoCard from '@/components/Gallery/PhotoCard.vue'
-
-expect.extend({ toMatchImageSnapshot })
-
-describe('PhotoCard Visual Tests', () => {
-  it('should match visual snapshot', async () => {
-    const { container } = render(PhotoCard, {
-      props: {
-        photo: mockPhoto,
-        isLiked: false
-      }
-    })
-
-    expect(container.firstChild).toMatchImageSnapshot({
-      customSnapshotIdentifier: 'photo-card-default'
-    })
-  })
-
-  it('should match liked state snapshot', async () => {
-    const { container } = render(PhotoCard, {
-      props: {
-        photo: mockPhoto,
-        isLiked: true
-      }
-    })
-
-    expect(container.firstChild).toMatchImageSnapshot({
-      customSnapshotIdentifier: 'photo-card-liked'
-    })
-  })
-})
-```
-
-### Continuous Integration Testing
+### Self-Hosted Supabase
 
 ```yaml
-# .github/workflows/test.yml
-name: Test Suite
+# docker-compose.yml for self-hosted Supabase
+version: '3.8'
 
-on: [push, pull_request]
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: supabase
+      POSTGRES_USER: supabase
+      POSTGRES_PASSWORD: your-password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  supabase:
+    image: supabase/supabase:latest
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: supabase
+      POSTGRES_USER: supabase
+      POSTGRES_PASSWORD: your-password
+      JWT_SECRET: your-jwt-secret
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_SUPABASE_URL=http://localhost:3000
+    command: pnpm run dev
+
+volumes:
+  postgres_data:
+```
+
+### CI/CD Pipeline
+
+```yaml
+# .github/workflows/deploy.yml
+name: Deploy Photography Portfolio
+
+on:
+  push:
+    branches: [main]
 
 jobs:
-  test:
+  test-and-build:
     runs-on: ubuntu-latest
-    
     steps:
       - uses: actions/checkout@v4
       
@@ -2973,26 +2012,106 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
+          cache: 'pnpm'
+      
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
       
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
       
-      - name: Run unit tests
-        run: npm run test:run
+      - name: Run tests
+        run: pnpm run test:run
       
-      - name: Run coverage
-        run: npm run test:coverage
+      - name: TypeScript check
+        run: pnpm run type-check
       
-      - name: Upload coverage reports
-        uses: codecov/codecov-action@v3
+      - name: Build frontend
+        run: pnpm run build
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          file: ./coverage/coverage-final.json
+          name: frontend-dist
+          path: dist/
+
+  deploy:
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.ORG_ID }}
+          vercel-project-id: ${{ secrets.PROJECT_ID }}
+          vercel-args: '--prod'
       
-      - name: Run E2E tests
+      - name: Deploy Supabase Functions
         run: |
-          npm run build
-          npm run test:e2e:headless
+          npx supabase functions deploy --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 ```
 
-This comprehensive TDD approach ensures your photography portfolio is robust, maintainable, and thoroughly tested. The combination of Vitest's speed, Vue Test Utils' component testing capabilities, and systematic TDD practices will result in high-quality, reliable code that's easy to refactor and extend.
+## Performance Monitoring
+
+```typescript
+// composables/usePerformanceMonitoring.ts
+import { onMounted } from 'vue'
+
+export function usePerformanceMonitoring() {
+  const trackCoreWebVitals = () => {
+    // Track Largest Contentful Paint
+    new PerformanceObserver((list) => {
+      const entries = list.getEntries()
+      const lastEntry = entries[entries.length - 1]
+      
+      // Send to analytics
+      sendMetric('LCP', lastEntry.startTime)
+    }).observe({ entryTypes: ['largest-contentful-paint'] })
+    
+    // Track First Input Delay
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        sendMetric('FID', entry.processingStart - entry.startTime)
+      }
+    }).observe({ entryTypes: ['first-input'] })
+    
+    // Track Cumulative Layout Shift
+    let clsValue = 0
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        if (!entry.hadRecentInput) {
+          clsValue += entry.value
+        }
+      }
+      sendMetric('CLS', clsValue)
+    }).observe({ entryTypes: ['layout-shift'] })
+  }
+  
+  const sendMetric = (name: string, value: number) => {
+    // Send to your analytics service
+    console.log(`${name}: ${value}`)
+  }
+  
+  onMounted(() => {
+    trackCoreWebVitals()
+  })
+}
+```
+
+This comprehensive implementation guide provides everything needed to build a modern, high-performance photography portfolio using the latest versions of Vue 3, Tailwind CSS v4, and Supabase. The setup emphasizes developer experience, performance optimization, and production readiness with modern deployment strategies and monitoring capabilities.
+
+## Quick Start Summary
+
+1. **Setup Vue 3 + Tailwind CSS v4**: Modern frontend with zero-config CSS
+2. **Configure Supabase**: Open source PostgreSQL backend with real-time
+3. **Implement TDD**: Comprehensive testing with Vitest
+4. **Add Real-time Features**: Live photo interactions and updates
+5. **Deploy**: Self-hosted or cloud deployment options
+
+The combination of Vue 3's reactivity, Tailwind CSS v4's performance, and Supabase's open source backend creates a powerful, scalable photography portfolio platform that's both developer-friendly and production-ready.
