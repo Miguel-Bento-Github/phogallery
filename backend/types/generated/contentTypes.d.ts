@@ -413,6 +413,7 @@ export interface AdminUser extends Struct.CollectionTypeSchema {
 export interface ApiPhotoPhoto extends Struct.CollectionTypeSchema {
   collectionName: 'photos';
   info: {
+    description: 'Photography portfolio photos';
     displayName: 'Photo';
     pluralName: 'photos';
     singularName: 'photo';
@@ -426,23 +427,46 @@ export interface ApiPhotoPhoto extends Struct.CollectionTypeSchema {
     };
   };
   attributes: {
-    category: Schema.Attribute.String & Schema.Attribute.Required;
+    cameraSettings: Schema.Attribute.Component<'photo.camera-settings', false>;
+    captureDate: Schema.Attribute.DateTime;
+    category: Schema.Attribute.Enumeration<
+      ['landscape', 'portrait', 'street', 'nature', 'architecture', 'abstract']
+    > &
+      Schema.Attribute.Required;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     description: Schema.Attribute.Text;
+    featured: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
     image: Schema.Attribute.Media<'images'> & Schema.Attribute.Required;
-    likes: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    likeCount: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<'oneToMany', 'api::photo.photo'> &
       Schema.Attribute.Private;
+    location: Schema.Attribute.String;
     photographer: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
+    slug: Schema.Attribute.UID<'title'>;
+    tags: Schema.Attribute.JSON & Schema.Attribute.DefaultTo<[]>;
     title: Schema.Attribute.String & Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
-    views: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    viewCount: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>;
   };
 }
 

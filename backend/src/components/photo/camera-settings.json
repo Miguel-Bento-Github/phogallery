@@ -1,0 +1,30 @@
+{
+  "collectionName": "components_photo_camera_settings",
+  "info": {
+    "displayName": "Camera Settings",
+    "description": "Camera and shooting settings for photos"
+  },
+  "options": {},
+  "attributes": {
+    "camera": {
+      "type": "string"
+    },
+    "lens": {
+      "type": "string"
+    },
+    "aperture": {
+      "type": "string"
+    },
+    "shutterSpeed": {
+      "type": "string"
+    },
+    "iso": {
+      "type": "integer",
+      "min": 50,
+      "max": 204800
+    },
+    "focalLength": {
+      "type": "string"
+    }
+  }
+} 

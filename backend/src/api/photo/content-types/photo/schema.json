@@ -4,7 +4,8 @@
   "info": {
     "singularName": "photo",
     "pluralName": "photos",
-    "displayName": "Photo"
+    "displayName": "Photo",
+    "description": "Photography portfolio photos"
   },
   "options": {
     "draftAndPublish": true
@@ -22,9 +23,22 @@
     "description": {
       "type": "text"
     },
+    "slug": {
+      "type": "uid",
+      "targetField": "title"
+    },
     "category": {
-      "type": "string",
+      "type": "enumeration",
+      "enum": ["landscape", "portrait", "street", "nature", "architecture", "abstract"],
       "required": true
+    },
+    "tags": {
+      "type": "json",
+      "default": []
+    },
+    "featured": {
+      "type": "boolean",
+      "default": false
     },
     "photographer": {
       "type": "string",
@@ -38,13 +52,26 @@
         "images"
       ]
     },
-    "likes": {
+    "likeCount": {
       "type": "integer",
-      "default": 0
+      "default": 0,
+      "min": 0
     },
-    "views": {
+    "viewCount": {
       "type": "integer",
-      "default": 0
+      "default": 0,
+      "min": 0
+    },
+    "cameraSettings": {
+      "type": "component",
+      "component": "photo.camera-settings",
+      "required": false
+    },
+    "location": {
+      "type": "string"
+    },
+    "captureDate": {
+      "type": "datetime"
     }
   }
 }

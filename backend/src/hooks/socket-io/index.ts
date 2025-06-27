@@ -34,33 +34,28 @@ export default ({ strapi }: { strapi: any }) => {
           try {
             const { photoId } = data
 
-            // Create like record
-            const like = await strapi.entityService.create('api::like.like', {
-              data: {
-                photo: photoId,
-                ipAddress: socket.handshake.address,
-                sessionId: socket.id
+            // Get current photo
+            const photo = await strapi.entityService.findOne('api::photo.photo', photoId)
+            if (!photo) {
+              socket.emit('error', { message: 'Photo not found' })
+              return
+            }
+
+            // Increment like count
+            const updatedPhoto = await strapi.entityService.update('api::photo.photo', photoId, {
+              data: { 
+                likeCount: (photo.likeCount || 0) + 1 
               }
-            })
-
-            // Get updated like count
-            const likeCount = await strapi.db.query('api::like.like').count({
-              where: { photo: photoId }
-            })
-
-            // Update photo like count
-            await strapi.entityService.update('api::photo.photo', photoId, {
-              data: { likeCount }
             })
 
             // Broadcast to all clients viewing this photo
             io.to(`photo:${photoId}`).emit('photo:like-update', {
               photoId,
-              likeCount,
+              likeCount: updatedPhoto.likeCount,
               socketId: socket.id
             })
 
-            console.log(`❤️ Photo ${photoId} liked. New count: ${likeCount}`)
+            console.log(`❤️ Photo ${photoId} liked. New count: ${updatedPhoto.likeCount}`)
 
           } catch (error) {
             console.error('❌ Like error:', error)
@@ -73,10 +68,14 @@ export default ({ strapi }: { strapi: any }) => {
           try {
             const { photoId } = data
             
+            // Get current photo
+            const currentPhoto = await strapi.entityService.findOne('api::photo.photo', photoId)
+            if (!currentPhoto) return
+
             // Increment view count
             const photo = await strapi.entityService.update('api::photo.photo', photoId, {
               data: {
-                viewCount: { $inc: 1 }
+                viewCount: (currentPhoto.viewCount || 0) + 1
               }
             })
 
