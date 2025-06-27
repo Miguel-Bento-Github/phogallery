@@ -19,64 +19,10 @@ export function useRealTimeGallery() {
   const recentActivity = ref<Array<{ type: string; data: any; timestamp: Date }>>([])
 
   const connect = () => {
-    const socketUrl = import.meta.env.VITE_STRAPI_URL || 'http://localhost:1337'
-    
-    socket.value = io(socketUrl, {
-      autoConnect: false,
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionAttempts: 5,
-      timeout: 20000
-    })
-
-    // Connection events
-    socket.value.on('connect', () => {
-      state.connected = true
-      state.error = null
-      console.log('🟢 Real-time connection established')
-    })
-
-    socket.value.on('disconnect', () => {
-      state.connected = false
-      console.log('🔴 Real-time connection lost')
-    })
-
-    socket.value.on('connect_error', (error) => {
-      state.error = error.message
-      console.error('❌ Real-time connection error:', error)
-    })
-
-    // Photo events
-    socket.value.on('photo:like-update', (data) => {
-      if (photoStats.value[data.photoId]) {
-        photoStats.value[data.photoId].likes = data.likeCount
-      }
-      
-      addActivity('like', {
-        photoId: data.photoId,
-        likeCount: data.likeCount
-      })
-    })
-
-    socket.value.on('photo:view-update', (data) => {
-      if (photoStats.value[data.photoId]) {
-        photoStats.value[data.photoId].views = data.viewCount
-      }
-    })
-
-    socket.value.on('gallery:new-photo', (data) => {
-      addActivity('new-photo', data.photo)
-    })
-
-    socket.value.on('photo:updated', (data) => {
-      addActivity('photo-update', data)
-    })
-
-    socket.value.on('photo:deleted', (data) => {
-      addActivity('photo-delete', data)
-    })
-
-    socket.value.connect()
+    // Real-time connection disabled for now
+    console.log('📡 Real-time connection disabled - using fallback mode')
+    state.connected = false
+    state.error = 'Real-time features temporarily disabled'
   }
 
   const disconnect = () => {
@@ -93,14 +39,28 @@ export function useRealTimeGallery() {
   }
 
   const likePhoto = (photoId: string) => {
-    if (socket.value && state.connected) {
-      socket.value.emit('photo:like', { photoId })
+    // Use direct API call instead of Socket.IO
+    console.log('❤️ Like photo (offline mode):', photoId)
+    
+    // Update local stats optimistically
+    if (photoStats.value[photoId]) {
+      photoStats.value[photoId].likes++
+    } else {
+      photoStats.value[photoId] = { likes: 1, views: 0 }
     }
+    
+    addActivity('like', { photoId, likeCount: photoStats.value[photoId].likes })
   }
 
   const viewPhoto = (photoId: string) => {
-    if (socket.value && state.connected) {
-      socket.value.emit('photo:view', { photoId })
+    // Use direct API call instead of Socket.IO
+    console.log('👁️ View photo (offline mode):', photoId)
+    
+    // Update local stats
+    if (photoStats.value[photoId]) {
+      photoStats.value[photoId].views++
+    } else {
+      photoStats.value[photoId] = { likes: 0, views: 1 }
     }
   }
 

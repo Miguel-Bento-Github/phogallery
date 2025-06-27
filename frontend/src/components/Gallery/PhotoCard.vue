@@ -156,3 +156,4 @@ const handleLikeClick = () => {
   emit('like')
 }
 </script>
+ 

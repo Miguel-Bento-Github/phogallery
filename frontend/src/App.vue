@@ -1,7 +1,7 @@
 <template>
   <div id="app">
     <AppLayout />
-  </div>
+    </div>
 </template>
 
 <script setup lang="ts">
